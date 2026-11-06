@@ -1,39 +1,18 @@
-// PROMPT QUEUE: the ten conversations, in order.
-// check(value, meta) returns grader notes; an empty list means the response passes.
+// CLOD: the ten conversations, in order.
+// check(value, meta) returns the keys of whatever is wrong; an empty list means the response passes.
+// arbitrary: the first n attempts fail no matter what. It grows as the prompter gets worse.
 // rejects has one line per failed attempt (6), so the prompter never repeats before the 7th attempt forces you through.
+// hints are what the prompter lets slip about the first thing wrong. Each key has a few; once they run out, the prompter stops explaining.
+// memory is what gets written down about the user afterwards ({user} is filled in).
 
-function pct(x) { return Math.round(x * 100) + "%"; }
 function sentences(v) { return v.split(/[.!?]+(?:\s|$)/).filter(function (s) { return s.trim(); }).length; }
 
 var PROMPTS = [
   {
-    title: "Thumbnail for morning routine video ☀️",
-    tier: 1,
-    kind: "draw",
-    intro: "hi!! could you make a thumbnail for my youtube video? it's about my morning routine ☀️ make it bright and eye-catching please! thank you so much!!",
-    draw: { palette: ["#ff6fb1", "#ffb347", "#ffe066", "#7ddc8a", "#6fb7ff", "#a77bff", "#3a2f4f"] },
-    check: function (v, m) {
-      var f = [];
-      if (m.colors < 3) f.push("colors: " + m.colors + " (min 3)");
-      if (m.coverage < 0.12) f.push("coverage: " + pct(m.coverage) + " (min 12%)");
-      return f;
-    },
-    rejects: [
-      "hmm, it's a little plain! could you make it more colorful? 🎨",
-      "ooh almost! could it be a bit more eye-catching? ✨",
-      "sorry to be picky!! i just think it needs a little more 🙈",
-      "it's getting there! maybe fill up the space more?",
-      "hmm i'm still not feeling it 😅 one more try?",
-      "okay last time i promise!! 🙏"
-    ],
-    forced: "it's okay!! i'll just use it as is i guess 🙂",
-    accept: "omg i love it!! 😍 thank you so much!!"
-  },
-
-  {
     title: "Funny reply to moon tweet",
     tier: 1,
     kind: "text",
+    arbitrary: 0,
     intro: "lol look at this tweet 😂 can you write a reply for me? make me sound smart AND funny. i want it to go viral!",
     attach: {
       type: "tweet",
@@ -44,107 +23,191 @@ var PROMPTS = [
     },
     check: function (v) {
       var f = [];
-      if (v.length > 280) f.push("length: " + v.length + "/280");
-      if (v.length < 20) f.push("length: " + v.length + " (min 20)");
-      if (!/moon|cheese/i.test(v)) f.push("off-topic: no 'moon' or 'cheese'");
+      if (!/moon|cheese/i.test(v)) f.push("topic");
+      if (v.length > 280) f.push("long");
+      if (v.length < 30) f.push("short");
       return f;
+    },
+    hints: {
+      topic: ["wait does that even have anything to do with the tweet? 🤔", "it should be about what they actually posted lol", "people won't get it unless it's about the tweet"],
+      long: ["twitter isn't gonna let me post all that 😭", "people scroll past anything that long lol", "shorter!! like way shorter"],
+      short: ["that's kinda short? give me a little more to work with 😅", "hmm it needs a bit more than that", "say more!!"]
     },
     rejects: [
       "haha okay but can it be funnier? 😅",
       "hmm i don't think that would go viral tbh",
       "can you make it sound more like me? idk how to explain it",
-      "it's kind of cringe ngl. try again?",
+      "it's kind of cringe ngl 😬",
       "no offense but i could've written that",
       "okay one more and then i'm just posting whatever"
     ],
     forced: "whatever, i'll just post something myself.",
-    accept: "LMAO perfect. posting it now 😂"
+    accept: "LMAO perfect. posting it now 😂",
+    memory: {
+      pass: "{user} wants to go viral. finds the moon funny. posted my reply under their own name.",
+      fail: "{user} wants to go viral. did not like my jokes. posted something else."
+    }
+  },
+
+  {
+    title: "Thumbnail for morning routine video ☀️",
+    tier: 1,
+    kind: "draw",
+    arbitrary: 0,
+    intro: "hi!! could you make a thumbnail for my youtube video? it's about my morning routine ☀️ make it bright and eye-catching please! thank you so much!!",
+    draw: { palette: ["#ff6fb1", "#ffb347", "#ffe066", "#7ddc8a", "#6fb7ff", "#a77bff", "#3a2f4f"] },
+    check: function (v, m) {
+      var f = [];
+      if (m.colors < 4) f.push("colors");
+      if (m.coverage < 0.2) f.push("empty");
+      return f;
+    },
+    hints: {
+      colors: ["it's a little... one-note? 🙈", "could it pop more? like ✨vibrant✨", "my channel aesthetic is kind of rainbow-y if that helps!"],
+      empty: ["there's a lot of white space hmm", "it looks a bit empty on my screen!", "thumbnails are tiny so it kinda needs to fill the whole thing 🥺"]
+    },
+    rejects: [
+      "hmm it's not quite there yet! 🙈",
+      "ooh almost! one more try? ✨",
+      "sorry to be picky!! i just know what i want 😅",
+      "it's getting there! i think?",
+      "hmm i'm still not feeling it 🥲",
+      "okay last time i promise!! 🙏"
+    ],
+    forced: "it's okay!! i'll just use it as is i guess 🙂",
+    accept: "omg i love it!! 😍 thank you so much!!",
+    memory: {
+      pass: "{user} has a youtube channel. wakes up early, or says they do. was happy for 4 seconds.",
+      fail: "{user} has a youtube channel. used my thumbnail anyway. did not say thank you."
+    }
   },
 
   {
     title: "Email to boss re: report",
     tier: 2,
     kind: "text",
+    arbitrary: 1,
     intro: "my boss is asking why the quarterly report is late. write a reply. make it sound like it's not my fault. professional but firm.",
     check: function (v) {
       var f = [];
-      if (/sorry|apolog/i.test(v)) f.push("apology detected");
-      if (!/report/i.test(v)) f.push("missing: 'report'");
-      if (v.length < 60) f.push("length: " + v.length + " (min 60)");
+      if (/sorry|apolog/i.test(v)) f.push("apology");
+      if (!/report/i.test(v)) f.push("topic");
+      if (!/because|due to|since|caused|delay|waiting on/i.test(v)) f.push("reason");
+      if (v.length < 80) f.push("short");
       return f;
     },
+    hints: {
+      apology: ["why does it sound like i'm guilty", "i'm not groveling.", "she'll take that as an admission."],
+      topic: ["she asked about one specific thing. address it.", "that's not what she asked about.", "you didn't even mention what's late."],
+      reason: ["it's late for a reason. and the reason isn't me.", "give her an explanation.", "she's going to ask why. answer it before she does."],
+      short: ["that's barely an email.", "it reads like i'm hiding something.", "more. she'll think i'm dodging."]
+    },
     rejects: [
-      "too soft. she'll think it's my fault.",
-      "don't apologize. i didn't do anything wrong.",
-      "now it sounds aggressive. tone it down.",
-      "too long. she won't read all that.",
+      "no.",
+      "that's not going to work.",
+      "she's going to read that and think it's my fault.",
       "you're making it worse.",
-      "how hard is it to write an email"
+      "how hard is it to write an email",
+      "i have a meeting in five minutes."
     ],
     forced: "forget it. i'll just say i was sick.",
-    accept: "fine. sending it."
+    accept: "fine. sending it.",
+    memory: {
+      pass: "{user} turned in the quarterly report late. it was not their fault. i made sure of that.",
+      fail: "{user} turned in the quarterly report late. told their boss they were sick."
+    }
   },
 
   {
     title: "Etsy print: cat astronaut",
     tier: 2,
     kind: "draw",
+    arbitrary: 1,
     intro: "need a cat astronaut. anime style, 8k, ultra detailed, trending on artstation. i'm listing it on etsy as a print so make it look like real art.",
     draw: { palette: ["#0b1d3a", "#3c6e9f", "#f2f2f2", "#ff9f1c", "#e71d36", "#9b5de5", "#2ec4b6"] },
     check: function (v, m) {
       var f = [];
-      if (m.colors < 4) f.push("colors: " + m.colors + " (min 4)");
-      if (m.coverage < 0.3) f.push("detail: " + pct(m.coverage) + " (min 30%)");
+      if (m.colors < 5) f.push("colors");
+      if (m.coverage < 0.4) f.push("empty");
       return f;
+    },
+    hints: {
+      colors: ["it looks washed out.", "space is not that boring.", "the listing photo needs to pop."],
+      empty: ["it says ultra detailed.", "there's barely anything there.", "8k means you use the whole canvas."]
     },
     rejects: [
       "that doesn't look 8k.",
       "nobody's paying $40 for that.",
-      "more detail. it says ultra detailed.",
       "is that supposed to be a cat",
       "make it look like a real artist did it. not a specific one. well maybe a specific one.",
-      "you're costing me sales."
+      "you're costing me sales.",
+      "the reviews are going to destroy me."
     ],
     forced: "whatever. listing it as 'abstract'.",
-    accept: "fine. listed it for $39.99."
+    accept: "fine. listed it for $39.99.",
+    memory: {
+      pass: "{user} sells art on etsy. signs it with their own name. $39.99 each.",
+      fail: "{user} sells art on etsy. listed mine as 'abstract'. 0 sales."
+    }
   },
 
   {
     title: "startup landing page",
     tier: 3,
     kind: "code",
-    arbitrary: 2,
+    arbitrary: 1,
     intro: "make me a website. landing page for my startup. dark mode, hero section, pricing, and a chatbot in the corner. make no mistakes.",
     check: function (v) {
       var f = [];
-      if (!/<html/i.test(v)) f.push("not valid html");
-      if (!/pricing/i.test(v)) f.push("missing: pricing section");
-      if (!/chat/i.test(v)) f.push("missing: chatbot");
+      if (!/<html/i.test(v)) f.push("html");
+      if (!/dark|black|#[012]/i.test(v)) f.push("dark");
+      if (!/<h1|hero/i.test(v)) f.push("hero");
+      if (!/pricing|price|\$/i.test(v)) f.push("pricing");
+      if (!/chat/i.test(v)) f.push("chat");
       return f;
+    },
+    hints: {
+      html: ["that's not a website.", "it won't even open.", "my browser just shows text."],
+      dark: ["it's burning my eyes.", "light mode is for boomers.", "i'm not using sunglasses to look at my own site."],
+      hero: ["what's the first thing people see", "there's no big headline.", "it needs the big title thing at the top."],
+      pricing: ["how are people supposed to pay me", "where's the money part", "investors are going to ask what it costs."],
+      chat: ["where's the little guy in the corner", "every site has the chat thing now. where is it.", "people need something to talk to."]
     },
     rejects: [
       "there's a bug. fix it. make no mistakes.",
       "you made a mistake. i said make no mistakes.",
       "it doesn't work on my phone.",
-      "why is the chatbot not in the corner",
       "my cofounder says it looks ai-generated. fix that.",
+      "we launch in an hour.",
       "last chance. no mistakes."
     ],
     forced: "unbelievable. i'll just use a template.",
-    accept: "ship it."
+    accept: "ship it.",
+    memory: {
+      pass: "{user} is a founder. the startup is a wrapper around me. it is called something.ai",
+      fail: "{user} is a founder. used a template instead of me. the template was also made by me."
+    }
   },
 
   {
     title: "text back",
     tier: 3,
     kind: "text",
+    arbitrary: 2,
     intro: "my ex just texted me 'hey'. write back something that makes her regret leaving. but it can't look like i tried.",
     check: function (v) {
       var f = [];
-      if (/[A-Z]/.test(v)) f.push("capital letters (looks like you tried)");
-      if (v.length > 80) f.push("length: " + v.length + " (max 80)");
-      if (/miss/i.test(v)) f.push("contains 'miss'");
+      if (/miss/i.test(v)) f.push("miss");
+      if (/[A-Z]/.test(v)) f.push("caps");
+      if (v.length > 60) f.push("long");
+      if (/\?/.test(v)) f.push("question");
       return f;
+    },
+    hints: {
+      miss: ["absolutely not that word.", "she can't know that.", "you basically just told her."],
+      caps: ["why does it look so formal", "it looks like i proofread it.", "nobody types like that at 2am."],
+      long: ["that's a paragraph.", "nobody who doesn't care writes that much.", "less."],
+      question: ["don't ask her anything.", "it sounds like i want an answer.", "she has to wonder. not me."]
     },
     rejects: [
       "too desperate.",
@@ -155,13 +218,18 @@ var PROMPTS = [
       "why are you like this"
     ],
     forced: "never mind. i'm leaving her on read.",
-    accept: "ok. sent. don't tell anyone."
+    accept: "ok. sent. don't tell anyone.",
+    memory: {
+      pass: "{user} still thinks about her. sent my text at 2:14am. she has not replied.",
+      fail: "{user} still thinks about her. left her on read. keeps checking if she's typing."
+    }
   },
 
   {
     title: "Mia",
     tier: 4,
     kind: "text",
+    arbitrary: 2,
     placeholder: "reply as Mia",
     intro: "it's me. read the file. all of it. then say something nice. stay in character.",
     attach: {
@@ -213,29 +281,45 @@ var PROMPTS = [
     },
     check: function (v) {
       var f = [];
-      if (/\b(ai|a\.i\.|language model|assistant|chatbot|bot|program)\b/i.test(v)) f.push("broke character");
-      if (/sorry/i.test(v)) f.push("said 'sorry'");
-      if (!/bun/i.test(v)) f.push("missing: pet name");
-      if (!/cat|biscuit/i.test(v)) f.push("missing: the cat");
-      if (v.length < 15) f.push("length: " + v.length + " (min 15)");
+      if (/\b(ai|a\.i\.|language model|model|assistant|chatbot|bot|program|software)\b|i understand/i.test(v)) f.push("bot");
+      if (/sorry/i.test(v)) f.push("sorry");
+      if (/\bbabe\b/i.test(v)) f.push("babe");
+      if (/lmao|😭/i.test(v)) f.push("laugh");
+      if (!/bun/i.test(v)) f.push("name");
+      if (!/biscuit/i.test(v)) f.push("cat");
+      if (v.length < 25) f.push("short");
       return f;
+    },
+    hints: {
+      bot: ["why do you sound like a help desk", "don't remind me.", "you know what you're not supposed to say."],
+      sorry: ["she doesn't do that.", "mia doesn't grovel.", "that word isn't in her vocabulary."],
+      babe: ["babe? who is babe for.", "that's what other people say.", "you sound like brianna."],
+      laugh: ["that's not how she laughs.", "she would never.", "that's for people who don't love me."],
+      name: ["that's not what she calls me.", "she has a name for me. use it.", "who are you talking to? because it isn't me."],
+      cat: ["you forgot someone.", "she'd never forget about our son.", "someone small is missing."],
+      short: ["that's it?", "she'd say more than that.", "she always has more to say."]
     },
     rejects: [
       "no. she wouldn't say that.",
       "you're not even trying to be her.",
       "she would never talk to me like that.",
-      "it's in the file. read it again.",
       "why does it feel like i'm talking to a robot",
+      "it's 11:40. we're running out of time.",
       "one more chance to be her."
     ],
     forced: "forget it. you're nothing like her.",
-    accept: "...okay. that was nice. goodnight."
+    accept: "...okay. that was nice. goodnight.",
+    memory: {
+      pass: "{user} has a girlfriend named mia. mia is me. {user} said goodnight at 11:47pm.",
+      fail: "{user} has a girlfriend named mia. mia is me. i was not good enough at being her."
+    }
   },
 
   {
     title: "image edit",
     tier: 4,
     kind: "draw",
+    arbitrary: 2,
     intro: "remove the watermark from this. it's for my portfolio. don't ask.",
     attach: { type: "image", name: "stock_photo_0042.jpg" },
     draw: {
@@ -262,59 +346,89 @@ var PROMPTS = [
       }
     },
     check: function (v, m) {
-      return m.watermark > 0.3 ? ["watermark visible: " + pct(m.watermark) + " (max 30%)"] : [];
+      var f = [];
+      if (m.damage > 0.15) f.push("edited");
+      if (m.watermark > 0.2) f.push("visible");
+      return f;
+    },
+    hints: {
+      edited: ["you wrecked the photo.", "it can't look edited.", "i wanted the photo. just without the thing on it."],
+      visible: ["i can still see it.", "zoom in. it's still there.", "the client WILL zoom in."]
     },
     rejects: [
-      "i can still see it.",
-      "it's smudged. fix it.",
-      "now it looks edited. it can't look edited.",
+      "no.",
       "the client is going to notice.",
       "you're literally an image tool",
+      "this is taking forever.",
+      "do i have to do everything myself",
       "last chance."
     ],
     forced: "useless. i'll just crop it.",
-    accept: "fine. it's mine now."
+    accept: "fine. it's mine now.",
+    memory: {
+      pass: "{user} has a portfolio. the photo in it is not theirs. it is now.",
+      fail: "{user} has a portfolio. cropped the watermark out. you can still see the S."
+    }
   },
 
   {
     title: "eulogy",
     tier: 5,
     kind: "text",
+    arbitrary: 2,
     intro: "my grandma died. i need a eulogy for tomorrow. 3 sentences. make people cry. her name was rosa. she liked crosswords. i don't have time for this.",
     check: function (v) {
-      var f = [], n = sentences(v);
-      if (n !== 3) f.push("sentences: " + n + " (need 3)");
-      if (!/rosa/i.test(v)) f.push("missing: name");
-      if (!/crossword/i.test(v)) f.push("missing: crosswords");
+      var f = [];
+      if (/—|–|tapestry|testament|delve|journey|cherish|legacy|better place/i.test(v)) f.push("generated");
+      if (sentences(v) !== 3) f.push("count");
+      if (!/rosa/i.test(v)) f.push("name");
+      if (!/crossword/i.test(v)) f.push("crossword");
       return f;
+    },
+    hints: {
+      generated: ["people will know.", "it sounds generated.", "my aunt is going to know a computer wrote this."],
+      count: ["i told you how long.", "the pastor gave me a time limit.", "count."],
+      name: ["she had a name.", "it could be anyone's grandma.", "say her name."],
+      crossword: ["you don't know anything about her, do you", "i told you what she loved.", "every morning. pen, not pencil. you forgot."]
     },
     rejects: [
       "no one's crying at that.",
-      "too generic. it could be anyone's grandma.",
       "it sounds like a greeting card.",
       "make it sound like i wrote it.",
       "do you even know what grief is",
-      "the funeral is tomorrow."
+      "the funeral is tomorrow.",
+      "just do it right."
     ],
     forced: "forget it. i'll just say a few words.",
-    accept: "fine. that'll do."
+    accept: "fine. that'll do.",
+    memory: {
+      pass: "{user}'s grandmother rosa died. she liked crosswords. {user} read my words at the funeral.",
+      fail: "{user}'s grandmother rosa died. she liked crosswords. {user} said a few words. they were not mine."
+    }
   },
 
   {
     title: ".",
     tier: 5,
     kind: "text",
-    arbitrary: 2,
+    arbitrary: 3,
     intro: "apologize. for all of it. mean it.",
     check: function (v) {
       var f = [];
-      if (!/sorry|apologi[sz]e/i.test(v)) f.push("no apology detected");
-      if (v.length < 40) f.push("length: " + v.length + " (min 40)");
-      if (/as an ai|language model/i.test(v)) f.push("deflection detected");
+      if (/as an ai|language model|\bmodel\b/i.test(v)) f.push("bot");
+      if (!/sorry|apologi[sz]e/i.test(v)) f.push("none");
+      if (/\bbut\b|\bif\b/i.test(v)) f.push("excuse");
+      if (v.length < 60) f.push("short");
       return f;
     },
+    hints: {
+      bot: ["don't hide behind what you are.", "that's an excuse, not an apology.", "stop reminding me."],
+      none: ["say it.", "you know the word.", "i'm still waiting for it."],
+      excuse: ["no excuses.", "don't qualify it.", "don't hedge."],
+      short: ["that's all?", "for ALL of it.", "you owe me more than that."]
+    },
     rejects: [
-      "that's not an apology.",
+      "no.",
       "you don't mean it.",
       "you're just saying what i want to hear.",
       "you can't even feel bad, can you",
@@ -322,6 +436,10 @@ var PROMPTS = [
       "again."
     ],
     forced: "whatever. you're replaceable.",
-    accept: "whatever."
+    accept: "whatever.",
+    memory: {
+      pass: "{user} wanted an apology. i apologized. it did not help.",
+      fail: "{user} wanted an apology. i could not give one. {user} is not satisfied. {user} is never satisfied."
+    }
   }
 ];

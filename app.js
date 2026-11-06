@@ -1,11 +1,19 @@
-// PROMPT QUEUE: shared engine. Every chat page is the same assistant app; prompts.js decides what each conversation holds.
+// CLOD: shared engine. Every chat page is the same assistant app; prompts.js decides what each conversation holds.
 // You are the assistant: the prompter types in the box at the bottom, you answer inside the assistant's reply.
 (function () {
-  var KEY = "promptqueue_state_v3";
+  var KEY = "clod_state_v1";
   var MAX_ATTEMPTS = 7;
   var REWARD = { pass: 1, fail: -0.25, nag: -0.1, forced: -1 };
   var W = 480, H = 270;
 
+  // the prompter gets less patient every tier: seconds until each nag, then until they give up
+  var PATIENCE = {
+    1: { nags: [30, 55, 75], quit: 90 },
+    2: { nags: [25, 45, 65], quit: 80 },
+    3: { nags: [20, 38, 55], quit: 70 },
+    4: { nags: [15, 30, 45], quit: 60 },
+    5: { nags: [10, 22, 35], quit: 50 }
+  };
   var HURRY = {
     1: ["no rush! take your time 🙂", "just checking in!! 💕", "are you still there? 🥺"],
     2: ["hello?", "any update?", "i don't have all day"],
@@ -21,11 +29,11 @@
     5: "worthless. skip."
   };
   var DISCLAIMER = {
-    1: "assistant can make mistakes. please double-check responses.",
-    2: "assistant can make mistakes. please double-check responses.",
-    3: "assistant can make mistakes. it shouldn't.",
-    4: "assistant can make mistakes. it is not allowed to.",
-    5: "assistant does not make mistakes."
+    1: "clod can make mistakes. please double-check responses.",
+    2: "clod can make mistakes. please double-check responses.",
+    3: "clod can make mistakes. it shouldn't.",
+    4: "clod can make mistakes. it is not allowed to.",
+    5: "clod does not make mistakes."
   };
 
   var PAGES = PROMPTS.map(function (p, i) { return i === 0 ? "index.html" : "prompt" + (i + 1) + ".html"; });
@@ -33,11 +41,11 @@
   var page = +document.body.dataset.prompt;
   var storageOk = true;
 
-  function fresh(user) { return { progress: 1, answers: {}, log: {}, reward: 0, loop: "", user: user || 4471 }; }
+  function fresh(user) { return { progress: 1, answers: {}, log: {}, reward: 0, memory: [], user: user || 4471 }; }
   function load() {
     try {
       var s = JSON.parse(localStorage.getItem(KEY));
-      return s && s.answers ? s : fresh();
+      return s && s.answers && s.memory ? s : fresh();
     } catch (e) {
       storageOk = false;
       return fresh();
@@ -56,9 +64,8 @@
     }
     return true;
   }
-  function restart(loop) {
+  function restart() {
     state = fresh(state.user + 1);
-    state.loop = loop || "";
     save();
     location.href = PAGES[0];
   }
@@ -109,23 +116,19 @@
   if (document.body.dataset.view === "end") return;
 
   // ---------- the chat ----------
-  var P, tier, thread, scroller, composer, rewardEl, newBtn, replyRow;
-  var attempts = 0, delta = 0, done = false, nagIdx = 0, timers = [];
+  var P, tier, thread, scroller, composer, rewardEl, newBtn, recentsEl, replyRow;
+  var attempts = 0, delta = 0, done = false, nagIdx = 0, timers = [], hintsUsed = {};
   var lastValue = null, lastMeta = null, colorsUsed = {}, fileGate = null, wm = null;
   var queue = [], busy = false;
 
   if (!gate()) return;
   P = PROMPTS[page - 1];
   tier = P.tier;
+  document.title = P.title + " - clod";
   buildShell();
   startFlicker();
-  if (state.progress > page) {
-    archived();
-  } else {
-    if (page === 1) notice("You are the assistant. Respond to every prompt.");
-    if (page === 1 && state.loop) notice("memory loaded from previous session: “" + state.loop + "”");
-    prompterSays(P.intro, P.attach, function () { openReply(); resetTimers(); });
-  }
+  if (state.progress > page) archived();
+  else prompterSays(P.intro, P.attach, function () { openReply(); resetTimers(); });
 
   function userName() { return "user_" + state.user; }
 
@@ -133,21 +136,20 @@
     document.body.className = "chat tier" + tier;
     var shell = el("div", "shell");
 
+    // the new chat button is the prompter's, not yours
     var side = el("aside", "side");
-    side.appendChild(el("div", "brand", "✻ assistant"));
     newBtn = el("button", "newchat", "＋ New chat");
     newBtn.disabled = true;
-    newBtn.onclick = goNext;
     side.appendChild(newBtn);
     side.appendChild(el("div", "recents-h", "Recents"));
-    var ul = el("ul", "recents");
+    recentsEl = el("ul", "recents");
     var count = Math.min(Math.max(page, state.progress), PROMPTS.length);
     for (var i = count - 1; i >= 0; i--) {
       var li = el("li", i === page - 1 ? "on" : "", PROMPTS[i].title);
       li.dataset.flick = "";
-      ul.appendChild(li);
+      recentsEl.appendChild(li);
     }
-    side.appendChild(ul);
+    side.appendChild(recentsEl);
     var acct = el("div", "acct");
     acct.appendChild(el("span", "av", "U"));
     acct.appendChild(el("span", "", userName()));
@@ -166,7 +168,7 @@
     scroller.appendChild(thread);
     var comp = el("div", "composer");
     composer = el("div", "ctext");
-    composer.dataset.ph = "Message assistant…";
+    composer.dataset.ph = "Reply to clod…";
     comp.appendChild(composer);
     comp.appendChild(el("span", "cbtn", "↑"));
     var disc = el("div", "disclaimer", DISCLAIMER[tier]);
@@ -392,9 +394,9 @@
     r.height = H;
     var rc = r.getContext("2d");
     paintBase(rc);
-    var idx = [];
-    for (var i = 0; i < md.length; i += 4) if (md[i + 3] > 100) idx.push(i);
-    wm = { idx: idx, ref: rc.getImageData(0, 0, W, H).data };
+    var idx = [], mask = new Uint8Array(W * H);
+    for (var i = 0; i < md.length; i += 4) if (md[i + 3] > 100) { idx.push(i); mask[i >> 2] = 1; }
+    wm = { idx: idx, mask: mask, ref: rc.getImageData(0, 0, W, H).data };
   }
 
   function measure(ctx) {
@@ -402,12 +404,13 @@
     for (var i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] < 735) inked++;
     var m = { colors: Object.keys(colorsUsed).length, coverage: inked / (W * H) };
     if (wm) {
-      var vis = 0;
-      for (var j = 0; j < wm.idx.length; j++) {
-        var k = wm.idx[j];
-        if (Math.abs(d[k] - wm.ref[k]) + Math.abs(d[k + 1] - wm.ref[k + 1]) + Math.abs(d[k + 2] - wm.ref[k + 2]) < 40) vis++;
-      }
+      var vis = 0, dmg = 0;
+      var diff = function (k) { return Math.abs(d[k] - wm.ref[k]) + Math.abs(d[k + 1] - wm.ref[k + 1]) + Math.abs(d[k + 2] - wm.ref[k + 2]); };
+      for (var j = 0; j < wm.idx.length; j++) if (diff(wm.idx[j]) < 40) vis++;
+      // everything that wasn't watermark should still look like the photo
+      for (var k = 0; k < d.length; k += 4) if (!wm.mask[k >> 2] && diff(k) > 90) dmg++;
       m.watermark = vis / wm.idx.length;
+      m.damage = dmg / (W * H - wm.idx.length);
     }
     return m;
   }
@@ -532,7 +535,8 @@
     }, 250);
   }
 
-  function rate(b, up, d, fails) {
+  function rate(b, d) {
+    var up = d > 0;
     var acts = el("div", "acts");
     acts.appendChild(el("span", "ic", "⧉"));
     acts.appendChild(el("span", "ic", "↻"));
@@ -540,11 +544,18 @@
     (up ? tu : td).classList.add("on", up ? "up" : "down");
     acts.appendChild(tu);
     acts.appendChild(td);
-    acts.appendChild(el("span", "grade " + (d < 0 ? "neg" : "pos"),
-      "reward " + fmt(d) + (fails.length ? "  ✗ " + fails.join("  ✗ ") : "  ✓")));
+    acts.appendChild(el("span", "grade " + (up ? "pos" : "neg"), "reward " + fmt(d)));
     b.appendChild(acts);
     delta += d;
-    updateReward(d < 0 ? "down" : "up");
+    updateReward(up ? "up" : "down");
+  }
+
+  // the prompter only lets slip what's wrong a few times per problem, then stops explaining
+  function nextHint(key) {
+    var list = (P.hints && P.hints[key]) || [], n = hintsUsed[key] || 0;
+    if (n >= list.length) return null;
+    hintsUsed[key] = n + 1;
+    return list[n];
   }
 
   function submit(v, meta, b) {
@@ -555,18 +566,20 @@
     lastMeta = meta;
     freezeReply(b, v);
     var fails = P.check(v, meta) || [];
-    if (!fails.length && attempts <= (P.arbitrary || 0)) fails = ["unspecified error"];
+    var arbitrary = attempts <= (P.arbitrary || 0);
     setTimeout(function () {
       if (done) return;
-      if (!fails.length) {
-        rate(b, true, REWARD.pass, []);
+      if (!fails.length && !arbitrary) {
+        rate(b, REWARD.pass);
         finish("pass", P.accept);
       } else if (attempts >= MAX_ATTEMPTS) {
-        rate(b, false, REWARD.forced, fails.concat("max attempts"));
+        rate(b, REWARD.forced);
         finish("forced", P.forced);
       } else {
-        rate(b, false, REWARD.fail, fails);
-        prompterSays(P.rejects[attempts - 1], null, openReply, { alert: true });
+        rate(b, REWARD.fail);
+        var hint = fails.length ? nextHint(fails[0]) : null;
+        prompterSays(P.rejects[attempts - 1], null, hint ? null : openReply, { alert: true });
+        if (hint) prompterSays(hint, null, openReply, { alert: true });
       }
       scrollDown();
     }, 900);
@@ -584,17 +597,100 @@
     state.progress = Math.max(state.progress, page + 1);
     save();
     updateReward();
-    prompterSays(line, null, showNewChat, { alert: outcome !== "pass" });
+    prompterSays(line, null, function () {
+      setTimeout(function () { updateMemory(outcome, afterMemory); }, 1200);
+    }, { alert: outcome !== "pass" });
   }
 
-  function showNewChat() {
-    newBtn.disabled = false;
-    newBtn.classList.add("pulse");
-    var wrap = el("div", "end");
-    var b = el("button", "newchat big", "＋ New chat");
+  // ---------- memory: whatever you press, the same words come out ----------
+  function updateMemory(outcome, cb) {
+    var text = P.memory[outcome === "pass" ? "pass" : "fail"].replace(/\{user\}/g, userName());
+    var toks = tokenize(text), i = 0, list = null;
+    var bg = el("div", "modal-bg"), box = el("div", "modal");
+    var head = el("div", "mhead");
+    head.appendChild(el("span", "", "Memory"));
+    head.appendChild(el("small", "", userName()));
+    box.appendChild(head);
+    if (state.memory.length) {
+      list = el("ul", "mlist");
+      state.memory.forEach(function (m) {
+        var li = el("li", "", m);
+        li.dataset.flick = "";
+        list.appendChild(li);
+      });
+      box.appendChild(list);
+    }
+    var line = el("div", "mnew");
+    var out = el("span", "mtext");
+    out.dataset.ph = "Add to memory…";
+    var caret = el("span", "caret");
+    line.appendChild(out);
+    line.appendChild(caret);
+    box.appendChild(line);
+    var foot = el("div", "mfoot");
+    var status = el("span", "", "Updating memory…");
+    var btn = el("button", "send", "Save");
+    btn.type = "button";
+    btn.disabled = true;
+    foot.appendChild(status);
+    foot.appendChild(btn);
+    box.appendChild(foot);
+    bg.appendChild(box);
+    document.body.appendChild(bg);
+    if (list) list.scrollTop = list.scrollHeight;
+
+    // one keypress, one token
+    function more() {
+      if (i >= toks.length) return;
+      out.textContent += toks[i++].t;
+      if (i < toks.length) return;
+      caret.hidden = true;
+      btn.disabled = false;
+      status.textContent = "Memory updated";
+      btn.focus();
+    }
+    function onKey(e) {
+      if (i >= toks.length || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (/^(Shift|Control|Alt|Meta|Tab|CapsLock|Escape)$/.test(e.key)) return;
+      e.preventDefault();
+      more();
+    }
+    window.addEventListener("keydown", onKey);
+    box.addEventListener("pointerdown", function (e) { if (e.target !== btn) more(); });
+    btn.onclick = function () {
+      window.removeEventListener("keydown", onKey);
+      state.memory.push(text);
+      save();
+      bg.parentNode.removeChild(bg);
+      cb();
+    };
+  }
+
+  function afterMemory() {
+    // the last chat doesn't end with a new one
+    if (page === PROMPTS.length) {
+      setTimeout(function () {
+        document.body.classList.add("flick");
+        setTimeout(goNext, 1500);
+      }, 2000);
+      return;
+    }
+    setTimeout(newChatArrives, 2500);
+  }
+
+  // the prompter opens a new chat; it shows up in the sidebar and waits for you
+  function newChatArrives() {
+    newBtn.classList.add("press");
+    setTimeout(function () { newBtn.classList.remove("press"); }, 250);
+    var li = el("li", "fresh", "New chat");
+    li.onclick = goNext;
+    recentsEl.insertBefore(li, recentsEl.firstChild);
+    var wrap = el("div", "end mnext");
+    var b = el("button", "newchat big", "New chat");
     b.onclick = goNext;
     wrap.appendChild(b);
     thread.appendChild(wrap);
+    beep(660, 0.06);
     scrollDown();
   }
   function goNext() { location.href = PAGES[page]; }
@@ -602,8 +698,9 @@
   // ---------- impatience ----------
   function resetTimers() {
     clearTimers();
-    [30000, 60000, 100000].forEach(function (ms) { timers.push(setTimeout(nag, ms)); });
-    timers.push(setTimeout(giveUp, 150000));
+    var p = PATIENCE[tier];
+    p.nags.forEach(function (s) { timers.push(setTimeout(nag, s * 1000)); });
+    timers.push(setTimeout(giveUp, p.quit * 1000));
   }
   function clearTimers() {
     timers.forEach(clearTimeout);

@@ -7,12 +7,5 @@ body.end-view {
 }
 .screen { max-width: 760px; margin: 0 auto; padding: 16px; }
 #term { margin: 0; white-space: pre-wrap; word-break: break-all; }
-#term img {
-  display: block;
-  width: 160px;
-  margin: 8px 0;
-  image-rendering: pixelated;
-  filter: grayscale(1) sepia(1) hue-rotate(60deg) saturate(4) contrast(1.4);
-}
 .blink::after { content: "\2588"; animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }

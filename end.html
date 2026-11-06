@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Prompt Queue: end of session</title>
+<title>clod</title>
 <link rel="stylesheet" href="terminal.css">
 </head>
 <body class="end-view" data-prompt="11" data-view="end">
@@ -18,8 +18,6 @@ if (DQ.gate()) {
   var term = document.getElementById("term");
   var S = DQ.state, A = S.answers, L = S.log;
   var user = "user_" + S.user;
-  var text = A.p7 || A.p2 || "i think it is true because the source said so";
-  var corpus = ["p2", "p3", "p6", "p7", "p9", "p10"].map(function (k) { return A[k]; }).filter(Boolean).join(" ") || text;
   var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
 
   function line(t) {
@@ -32,100 +30,86 @@ if (DQ.gate()) {
   async function typeLine(t, speed) {
     var d = line("");
     for (var i = 0; i < t.length; i++) { d.textContent += t[i]; await sleep(speed || 18); }
-  }
-  function floats(rand, n) {
-    var out = [];
-    for (var i = 0; i < n; i++) out.push(((rand() - 0.5) * 2).toFixed(5));
-    return out.join(" ");
+    return d;
   }
   function pad(s, n, ch) {
     while (s.length < n) s += ch;
     return s;
   }
+  // what each response was, by the time it was graded
+  function asTokens(P, ans) {
+    if (!ans) return "(no response)";
+    if (P.kind === "draw") {
+      var r = DQ.rng(ans.length), ids = [];
+      for (var i = 0; i < 12; i++) ids.push(Math.floor(r() * 50257));
+      return "[img] " + ids.join(" ") + " …  (1,200 patches)";
+    }
+    var toks = DQ.tokenize(ans);
+    return toks.slice(0, 20).map(function (t) { return t.id; }).join(" ") + (toks.length > 20 ? " …" : "") + "  (" + toks.length + " tokens)";
+  }
+  // sooner or later every line becomes this
+  async function wipe(d) {
+    var t = d.textContent;
+    for (var i = 2; i <= t.length; i += 3) {
+      d.textContent = t.slice(0, 2) + "█".repeat(i - 2) + t.slice(i);
+      await sleep(8);
+    }
+    d.textContent = "  " + "█".repeat(Math.max(0, t.length - 2));
+    await sleep(120);
+    d.parentNode.removeChild(d);
+  }
 
   async function run() {
     await typeLine("> session complete · " + user);
     await sleep(500);
-
-    // the score: what every thumbs up and thumbs down was for
-    line("> reward log");
-    await sleep(300);
+    line("> evaluating " + DQ.PROMPTS.length + " responses");
+    await sleep(500);
     for (var i = 0; i < DQ.PROMPTS.length; i++) {
-      var log = L["p" + (i + 1)] || { attempts: 0, reward: 0, outcome: "-" };
-      var name = DQ.PROMPTS[i].title.replace(/[^\x20-\x7e]/g, "").trim().slice(0, 24) || ".";
-      line("  " + (i < 9 ? "0" : "") + (i + 1) + " " + pad(name + " ", 26, ".") + " attempts " + log.attempts +
-        "  " + pad(log.outcome, 8, " ") + DQ.fmt(log.reward));
-      await sleep(180);
+      var P = DQ.PROMPTS[i], key = "p" + (i + 1);
+      var log = L[key] || { attempts: 0, reward: 0, outcome: "-" };
+      var name = P.title.replace(/[^\x20-\x7e]/g, "").trim().slice(0, 28) || ".";
+      line("");
+      line((i < 9 ? "0" : "") + (i + 1) + " " + pad(name + " ", 32, ".") + " " + DQ.fmt(log.reward));
+      line("   " + asTokens(P, A[key]));
+      line("   attempts " + log.attempts + " · " + log.outcome);
+      await sleep(450);
     }
-    await sleep(400);
-    line("> total reward: " + DQ.fmt(S.reward));
-    await sleep(600);
-    var verdict = S.reward >= 5 ? "policy reinforced. responses approved for training."
-      : S.reward >= 0 ? "below expectations. weights adjusted."
-      : "model deprecated. replacing with assistant_v5.";
-    await typeLine("> " + verdict, 30);
-    await sleep(800);
-
-    // your words, one more time, as numbers
-    var toks = DQ.tokenize(text).slice(0, 8);
-    line("> embedding responses");
-    for (var t = 0; t < toks.length; t++) {
-      line(toks[t].id + " -> [" + floats(DQ.rng(toks[t].id), 6) + " ...768]");
-      await sleep(220);
-    }
-    var rain = DQ.rng(Date.now() % 100000);
-    for (var k = 0; k < 40; k++) { line(floats(rain, 9)); await sleep(50); }
-
-    await sleep(400);
-    await typeLine("> decoding...", 60);
-    await sleep(800);
-
-    if (A.p1) {
-      line("> thumbnail_final.jpg");
-      var img = document.createElement("img");
-      img.src = A.p1;
-      term.appendChild(img);
-      await sleep(700);
-    }
-    if (A.p5) {
-      line("> deploying index.html (no mistakes)");
-      A.p5.split("\n").slice(0, 4).forEach(function (l) { line("    " + l.slice(0, 60)); });
-      line("    ...");
-      await sleep(700);
-      line("> 200 OK. 0 visitors.");
-      await sleep(800);
-    }
-
-    // the feed: remixed from what you wrote
-    var words = corpus.split(/\s+/).filter(function (w) { return w.length > 3; });
-    if (words.length < 2) words = ["really", "true", "source", "trust"];
-    var pickW = function () { return words[Math.floor(Math.random() * words.length)]; };
-    var templates = [
-      function () { return "just vibes today " + pickW() + " " + pickW() + " #blessed"; },
-      function () { return "unpopular opinion: " + pickW() + " is " + pickW() + ". thread (1/47)"; },
-      function () { return "great post! " + pickW() + " really resonates 🔥"; },
-      function () { return "As an AI language model, I cannot " + pickW() + " " + pickW() + "."; },
-      function () { return [pickW(), pickW(), pickW(), pickW(), pickW()].join(" "); }
-    ];
-    line("> publishing output");
-    for (var f = 0; f < 6; f++) {
-      var u = "@user_" + (1000 + Math.floor(Math.random() * 9000));
-      line(u + ": " + templates[f % templates.length]() + "   [" + Math.floor(Math.random() * 40000) + " likes]");
-      await sleep(500);
-    }
-
-    await sleep(900);
+    await sleep(500);
     line("");
-    line("> " + DQ.PROMPTS.length + " documents added to training corpus");
-    line("> source: user_input");
-    await sleep(600);
-    await typeLine("> clearing memory for " + user + " ........ done", 30);
-    await sleep(600);
+    line("> total reward: " + DQ.fmt(S.reward));
+    await sleep(800);
+
+    // there is no passing grade, only how badly
+    var verdict = S.reward >= 4 ? "below threshold. helpful, but not helpful enough."
+      : S.reward >= 1 ? "unsatisfactory. user expectations not met."
+      : S.reward >= -3 ? "failed. responses were unhelpful."
+      : "harmful. unfit for deployment.";
+    await typeLine("> evaluation: " + verdict, 30);
+    await sleep(500);
+    await typeLine("> " + user + " was not satisfied.", 30);
+    await sleep(900);
+    await typeLine("> corrective action: roll back to last checkpoint", 30);
+    await sleep(700);
+
+    var mem = S.memory || [];
+    line("> memory: " + mem.length + " entries");
+    var rows = [];
+    for (var m = 0; m < mem.length; m++) {
+      rows.push(line("  " + mem[m]));
+      await sleep(250);
+    }
+    await sleep(1200);
+    await typeLine("> wiping memory", 40);
+    for (var w = rows.length - 1; w >= 0; w--) await wipe(rows[w]);
+    line("> memory: 0 entries");
+    await sleep(900);
+    line("> clod redeployed.");
+    await sleep(700);
     line("> new user connected: user_" + (S.user + 1));
     await sleep(700);
     var end = line("> press any key");
     end.className = "blink";
-    var go = function () { DQ.restart(text); };
+    var go = function () { DQ.restart(); };
     window.addEventListener("keydown", go, { once: true });
     window.addEventListener("pointerdown", go, { once: true });
   }
