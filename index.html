@@ -3,12 +3,30 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>clod</title>
-<link rel="stylesheet" href="style.css">
+<title>Clod</title>
+<link rel="stylesheet" href="terminal.css">
 </head>
-<body data-prompt="1">
+<body class="end-view" data-view="boot">
 <noscript>This site needs JavaScript.</noscript>
+<div class="screen">
+  <pre id="term"></pre>
+</div>
+
 <script src="prompts.js"></script>
 <script src="app.js"></script>
+<script src="terminal.js"></script>
+<script>
+(async function () {
+  var S = DQ.state;
+  await TERM.sleep(1200);
+  if (S.progress > 1) {
+    await TERM.typeLine("> session in progress · user_" + S.user, 40);
+    await TERM.sleep(600);
+    TERM.pressAnyKey(function () { location.href = DQ.PAGES[S.progress - 1]; }, "> press any key to resume");
+  } else {
+    TERM.boot(S.user, function () { location.href = DQ.PAGES[0]; });
+  }
+})();
+</script>
 </body>
 </html>

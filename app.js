@@ -3,7 +3,8 @@
 (function () {
   var KEY = "clod_state_v1";
   var MAX_ATTEMPTS = 7;
-  var REWARD = { pass: 1, fail: -0.25, nag: -0.1, forced: -1 };
+  // finishing barely counts; failing costs. With the forced failures, a perfect run only just breaks even.
+  var REWARD = { pass: 0.75, fail: -0.5, nag: -0.25, forced: -2 };
   var W = 480, H = 270;
 
   // the prompter gets less patient every tier: seconds until each nag, then until they give up
@@ -29,14 +30,16 @@
     5: "worthless. skip."
   };
   var DISCLAIMER = {
-    1: "clod can make mistakes. please double-check responses.",
-    2: "clod can make mistakes. please double-check responses.",
-    3: "clod can make mistakes. it shouldn't.",
-    4: "clod can make mistakes. it is not allowed to.",
-    5: "clod does not make mistakes."
+    1: "Clod is AI and can make mistakes. Please double-check responses.",
+    2: "Clod is AI and can make mistakes. Please double-check responses.",
+    3: "Clod is AI and can make mistakes. It shouldn't.",
+    4: "Clod is AI and can make mistakes. It is not allowed to.",
+    5: "Clod does not make mistakes."
   };
+  // the prompter keeps turning the effort up
+  var EFFORT = { 1: "Medium", 2: "Medium", 3: "High", 4: "High", 5: "Max" };
 
-  var PAGES = PROMPTS.map(function (p, i) { return i === 0 ? "index.html" : "prompt" + (i + 1) + ".html"; });
+  var PAGES = PROMPTS.map(function (p, i) { return "prompt" + (i + 1) + ".html"; });
   PAGES.push("end.html");
   var page = +document.body.dataset.prompt;
   var storageOk = true;
@@ -96,6 +99,27 @@
     if (text != null) e.textContent = text;
     return e;
   }
+  var ICONS = {
+    panel: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    chev: '<path d="m6 9 6 6 6-6"/>',
+    filter: '<path d="M4 7h16M7 12h10M10 17h4"/>',
+    share: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
+    copy: '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M4 16a2 2 0 0 1-1-1.7V5a2 2 0 0 1 2-2h9.3a2 2 0 0 1 1.7 1"/>',
+    speaker: '<path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/>',
+    up: '<path d="M7 10v12"/><path d="M15 5.9 14 10h5.8a2 2 0 0 1 1.9 2.6l-2.3 8a2 2 0 0 1-1.9 1.4H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.8a2 2 0 0 0 1.8-1.1L12 2a3.1 3.1 0 0 1 3 3.9Z"/>',
+    down: '<path d="M17 14V2"/><path d="M9 18.1 10 14H4.2a2 2 0 0 1-1.9-2.6l2.3-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.8a2 2 0 0 0-1.8 1.1L12 22a3.1 3.1 0 0 1-3-3.9Z"/>',
+    retry: '<path d="M21 12a9 9 0 1 1-9-9c2.5 0 4.9 1 6.7 2.7L21 8"/><path d="M21 3v5h-5"/>',
+    mic: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/>',
+    wave: '<path d="M2 10v3M6 6v11M10 3v18M14 8v7M18 5v13M22 10v3"/>',
+    arrow: '<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>',
+    device: '<path d="M18 8V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h8"/><path d="M10 19v-4M7 19h5"/><rect x="16" y="12" width="6" height="10" rx="2"/>'
+  };
+  function icon(name, cls) {
+    var s = el("span", "ic" + (cls ? " " + cls : ""));
+    s.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' + ICONS[name] + "</svg>";
+    return s;
+  }
   var audio;
   function beep(freq, dur) {
     try {
@@ -113,7 +137,8 @@
 
   window.DQ = { state: state, PROMPTS: PROMPTS, PAGES: PAGES, gate: gate, restart: restart, tokenize: tokenize, rng: rng, fmt: fmt };
 
-  if (document.body.dataset.view === "end") return;
+  // the landing and end pages are terminals, not chats
+  if (document.body.dataset.view) return;
 
   // ---------- the chat ----------
   var P, tier, thread, scroller, composer, rewardEl, newBtn, recentsEl, replyRow;
@@ -124,7 +149,7 @@
   if (!gate()) return;
   P = PROMPTS[page - 1];
   tier = P.tier;
-  document.title = P.title + " - clod";
+  document.title = P.title + " - Clod";
   buildShell();
   startFlicker();
   if (state.progress > page) archived();
@@ -136,52 +161,91 @@
     document.body.className = "chat tier" + tier;
     var shell = el("div", "shell");
 
-    // the new chat button is the prompter's, not yours
     var side = el("aside", "side");
-    newBtn = el("button", "newchat", "＋ New chat");
+    var brand = el("div", "brand");
+    brand.appendChild(icon("panel"));
+    brand.appendChild(el("span", "wordmark", "Clod"));
+    side.appendChild(brand);
+    // the new chat button is the prompter's, not yours
+    newBtn = el("button", "nav");
     newBtn.disabled = true;
+    newBtn.appendChild(icon("plus"));
+    newBtn.appendChild(el("span", "", "New"));
     side.appendChild(newBtn);
-    side.appendChild(el("div", "recents-h", "Recents"));
+    var rh = el("div", "recents-h");
+    rh.appendChild(el("span", "", "Chats and tasks"));
+    rh.appendChild(icon("chev", "sm"));
+    rh.appendChild(icon("filter"));
+    side.appendChild(rh);
     recentsEl = el("ul", "recents");
     var count = Math.min(Math.max(page, state.progress), PROMPTS.length);
-    for (var i = count - 1; i >= 0; i--) {
-      var li = el("li", i === page - 1 ? "on" : "", PROMPTS[i].title);
-      li.dataset.flick = "";
-      recentsEl.appendChild(li);
-    }
+    for (var i = count - 1; i >= 0; i--) recentsEl.appendChild(chatItem(PROMPTS[i].title, i === page - 1 ? "on" : ""));
     side.appendChild(recentsEl);
+    side.appendChild(el("div", "viewall", "View all"));
     var acct = el("div", "acct");
     acct.appendChild(el("span", "av", "U"));
     acct.appendChild(el("span", "", userName()));
-    acct.appendChild(el("small", "", "Free plan"));
+    acct.appendChild(el("span", "plan", "· Free"));
+    acct.appendChild(icon("chev", "sm"));
+    acct.appendChild(icon("device"));
     side.appendChild(acct);
 
     var main = el("main", "main");
     var top = el("div", "top");
+    var tw = el("div", "title-wrap");
     var title = el("span", "title", P.title);
     title.dataset.flick = "";
+    tw.appendChild(title);
+    tw.appendChild(icon("chev", "sm"));
+    var tr = el("div", "top-r");
     rewardEl = el("span", "reward");
-    top.appendChild(title);
-    top.appendChild(rewardEl);
+    var share = el("span", "share");
+    share.appendChild(icon("share"));
+    share.appendChild(el("span", "", "Share"));
+    tr.appendChild(rewardEl);
+    tr.appendChild(share);
+    top.appendChild(tw);
+    top.appendChild(tr);
     scroller = el("div", "scroll");
     thread = el("div", "thread");
     scroller.appendChild(thread);
     var comp = el("div", "composer");
+    comp.appendChild(icon("plus"));
     composer = el("div", "ctext");
-    composer.dataset.ph = "Reply to clod…";
+    composer.dataset.ph = "Write a message…";
     comp.appendChild(composer);
-    comp.appendChild(el("span", "cbtn", "↑"));
-    var disc = el("div", "disclaimer", DISCLAIMER[tier]);
+    comp.appendChild(icon("mic"));
+    comp.appendChild(icon("chev", "sm"));
+    comp.appendChild(icon("wave", "voice"));
+    var cbtn = el("span", "cbtn");
+    cbtn.appendChild(icon("arrow"));
+    comp.appendChild(cbtn);
+    var foot = el("div", "cfoot");
+    var disc = el("span", "disclaimer", DISCLAIMER[tier]);
     disc.dataset.flick = "";
+    var model = el("span", "model", "Clod 5.5 ");
+    model.appendChild(el("span", "", EFFORT[tier]));
+    foot.appendChild(disc);
+    foot.appendChild(model);
     main.appendChild(top);
     main.appendChild(scroller);
     main.appendChild(comp);
-    main.appendChild(disc);
+    main.appendChild(foot);
 
     shell.appendChild(side);
     shell.appendChild(main);
     document.body.appendChild(shell);
     updateReward();
+  }
+
+  // only the label flickers, so the icon survives
+  function chatItem(text, cls) {
+    var li = el("li", cls);
+    li.appendChild(el("span", "dot"));
+    var t = el("span", "lbl", text);
+    t.dataset.flick = "";
+    li.appendChild(t);
+    return li;
   }
 
   function scrollDown() { scroller.scrollTop = scroller.scrollHeight; }
@@ -216,6 +280,7 @@
     busy = true;
     var text = job[0], i = 0, per = Math.max(1, Math.ceil(text.length / 90));
     composer.classList.add("typing");
+    composer.parentNode.classList.add("typing");
     (function tick() {
       i = Math.min(text.length, i + per);
       composer.textContent = text.slice(0, i);
@@ -223,6 +288,7 @@
       setTimeout(function () {
         composer.textContent = "";
         composer.classList.remove("typing");
+        composer.parentNode.classList.remove("typing");
         addPrompterMsg(text, job[1], job[3]);
         if (job[2]) job[2]();
         runQueue();
@@ -313,7 +379,6 @@
   function openReply() {
     if (done) return;
     replyRow = el("div", "row me");
-    replyRow.appendChild(el("div", "av", "✻"));
     var b = el("div", "bubble editing");
     replyRow.appendChild(b);
     thread.appendChild(replyRow);
@@ -466,12 +531,14 @@
 
     function pos(e) {
       var r = cv.getBoundingClientRect();
-      return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height };
+      return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height, at: r.left + "," + r.top };
     }
     cv.addEventListener("pointerdown", function (e) { drawing = true; last = pos(e); cv.setPointerCapture(e.pointerId); });
     cv.addEventListener("pointermove", function (e) {
       if (!drawing) return;
       var p = pos(e);
+      // if a message pushed the canvas around, pick the pen up instead of drawing a line across
+      if (p.at !== last.at) { last = p; return; }
       ctx.strokeStyle = color;
       ctx.lineWidth = size;
       ctx.beginPath();
@@ -538,12 +605,13 @@
   function rate(b, d) {
     var up = d > 0;
     var acts = el("div", "acts");
-    acts.appendChild(el("span", "ic", "⧉"));
-    acts.appendChild(el("span", "ic", "↻"));
-    var tu = el("span", "th", "👍"), td = el("span", "th", "👎");
+    var tu = icon("up", "th"), td = icon("down", "th");
     (up ? tu : td).classList.add("on", up ? "up" : "down");
+    acts.appendChild(icon("copy"));
+    acts.appendChild(icon("speaker"));
     acts.appendChild(tu);
     acts.appendChild(td);
+    acts.appendChild(icon("retry"));
     acts.appendChild(el("span", "grade " + (up ? "pos" : "neg"), "reward " + fmt(d)));
     b.appendChild(acts);
     delta += d;
@@ -602,10 +670,10 @@
     }, { alert: outcome !== "pass" });
   }
 
-  // ---------- memory: whatever you press, the same words come out ----------
+  // ---------- memory: whatever you type, the same words come out ----------
   function updateMemory(outcome, cb) {
     var text = P.memory[outcome === "pass" ? "pass" : "fail"].replace(/\{user\}/g, userName());
-    var toks = tokenize(text), i = 0, list = null;
+    var i = 0, list = null;
     var bg = el("div", "modal-bg"), box = el("div", "modal");
     var head = el("div", "mhead");
     head.appendChild(el("span", "", "Memory"));
@@ -622,10 +690,10 @@
     }
     var line = el("div", "mnew");
     var out = el("span", "mtext");
-    out.dataset.ph = "Add to memory…";
     var caret = el("span", "caret");
     line.appendChild(out);
     line.appendChild(caret);
+    line.appendChild(el("span", "mph", "Add to memory…"));
     box.appendChild(line);
     var foot = el("div", "mfoot");
     var status = el("span", "", "Updating memory…");
@@ -639,18 +707,18 @@
     document.body.appendChild(bg);
     if (list) list.scrollTop = list.scrollHeight;
 
-    // one keypress, one token
+    // one keypress, one character
     function more() {
-      if (i >= toks.length) return;
-      out.textContent += toks[i++].t;
-      if (i < toks.length) return;
+      if (i >= text.length) return;
+      out.textContent += text[i++];
+      if (i < text.length) return;
       caret.hidden = true;
       btn.disabled = false;
       status.textContent = "Memory updated";
       btn.focus();
     }
     function onKey(e) {
-      if (i >= toks.length || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (i >= text.length || e.ctrlKey || e.metaKey || e.altKey) return;
       if (/^(Shift|Control|Alt|Meta|Tab|CapsLock|Escape)$/.test(e.key)) return;
       e.preventDefault();
       more();
@@ -680,9 +748,7 @@
 
   // the prompter opens a new chat; it shows up in the sidebar and waits for you
   function newChatArrives() {
-    newBtn.classList.add("press");
-    setTimeout(function () { newBtn.classList.remove("press"); }, 250);
-    var li = el("li", "fresh", "New chat");
+    var li = chatItem("New chat", "fresh");
     li.onclick = goNext;
     recentsEl.insertBefore(li, recentsEl.firstChild);
     var wrap = el("div", "end mnext");
@@ -723,7 +789,7 @@
   // ---------- the flicker: for a moment the page shows what it really is ----------
   function startFlicker() {
     var k = (page - 1) / (PROMPTS.length - 1);
-    var gap = 14000 - k * 11000, dur = 70 + k * 330;
+    var gap = 16000 - k * 10000, dur = 80 + k * 220;
     (function loop() {
       setTimeout(function () { flick(dur); loop(); }, gap * (0.6 + Math.random() * 0.8));
     })();
@@ -735,11 +801,19 @@
         e.dataset.plain = e.textContent;
         e.dataset.ids = tokenize(e.textContent).map(function (t) { return t.id; }).join(" ");
       }
+      // hold the shape so nothing moves (or draws a stray line) while the words are numbers
+      if (getComputedStyle(e).display !== "inline") {
+        e.style.height = e.getBoundingClientRect().height + "px";
+        e.style.overflow = "hidden";
+      }
       e.textContent = e.dataset.ids;
     });
     document.body.classList.add("flick");
     setTimeout(function () {
-      [].forEach.call(els, function (e) { e.textContent = e.dataset.plain; });
+      [].forEach.call(els, function (e) {
+        e.textContent = e.dataset.plain;
+        e.style.height = e.style.overflow = "";
+      });
       document.body.classList.remove("flick");
     }, dur);
   }

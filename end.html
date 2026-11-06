@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>clod</title>
+<title>Clod</title>
 <link rel="stylesheet" href="terminal.css">
 </head>
 <body class="end-view" data-prompt="11" data-view="end">
@@ -13,105 +13,121 @@
 
 <script src="prompts.js"></script>
 <script src="app.js"></script>
+<script src="terminal.js"></script>
 <script>
 if (DQ.gate()) {
-  var term = document.getElementById("term");
+  var term = TERM.term, line = TERM.line, typeLine = TERM.typeLine, sleep = TERM.sleep, pad = TERM.pad;
   var S = DQ.state, A = S.answers, L = S.log;
   var user = "user_" + S.user;
-  var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+  var THRESHOLD = 5;
 
-  function line(t) {
-    var d = document.createElement("div");
-    d.textContent = t;
-    term.appendChild(d);
-    window.scrollTo(0, document.body.scrollHeight);
+  // a drawing becomes 16×9 patches; each patch's colour becomes a token
+  function imageTokens(src) {
+    return new Promise(function (resolve) {
+      var img = new Image();
+      img.onload = function () {
+        var c = document.createElement("canvas");
+        c.width = 16;
+        c.height = 9;
+        var ctx = c.getContext("2d");
+        ctx.drawImage(img, 0, 0, 16, 9);
+        var d = ctx.getImageData(0, 0, 16, 9).data, ids = [];
+        for (var i = 0; i < d.length; i += 4) ids.push((((d[i] >> 2) << 12) | ((d[i + 1] >> 2) << 6) | (d[i + 2] >> 2)) % 50257);
+        resolve(ids);
+      };
+      img.onerror = function () { resolve([]); };
+      img.src = src;
+    });
+  }
+  async function streamIds(ids) {
+    var d = line("   ");
+    var per = Math.max(1, Math.ceil(ids.length / 120));
+    for (var i = 0; i < ids.length; i += per) {
+      d.textContent += ids.slice(i, i + per).join(" ") + " ";
+      window.scrollTo(0, document.body.scrollHeight);
+      await sleep(16);
+    }
     return d;
   }
-  async function typeLine(t, speed) {
-    var d = line("");
-    for (var i = 0; i < t.length; i++) { d.textContent += t[i]; await sleep(speed || 18); }
-    return d;
-  }
-  function pad(s, n, ch) {
-    while (s.length < n) s += ch;
-    return s;
-  }
-  // what each response was, by the time it was graded
-  function asTokens(P, ans) {
-    if (!ans) return "(no response)";
-    if (P.kind === "draw") {
-      var r = DQ.rng(ans.length), ids = [];
-      for (var i = 0; i < 12; i++) ids.push(Math.floor(r() * 50257));
-      return "[img] " + ids.join(" ") + " …  (1,200 patches)";
-    }
-    var toks = DQ.tokenize(ans);
-    return toks.slice(0, 20).map(function (t) { return t.id; }).join(" ") + (toks.length > 20 ? " …" : "") + "  (" + toks.length + " tokens)";
-  }
-  // sooner or later every line becomes this
-  async function wipe(d) {
-    var t = d.textContent;
-    for (var i = 2; i <= t.length; i += 3) {
-      d.textContent = t.slice(0, 2) + "█".repeat(i - 2) + t.slice(i);
-      await sleep(8);
-    }
-    d.textContent = "  " + "█".repeat(Math.max(0, t.length - 2));
-    await sleep(120);
-    d.parentNode.removeChild(d);
+  async function blackout(d) {
+    d.textContent = d.textContent.replace(/\S/g, "█");
+    await sleep(30);
   }
 
   async function run() {
-    await typeLine("> session complete · " + user);
-    await sleep(500);
-    line("> evaluating " + DQ.PROMPTS.length + " responses");
-    await sleep(500);
+    await typeLine("> session complete", 40);
+    await sleep(1500);
+    await typeLine("> evaluating responses", 40);
+    await sleep(1200);
+
+    var printed = [];
     for (var i = 0; i < DQ.PROMPTS.length; i++) {
-      var P = DQ.PROMPTS[i], key = "p" + (i + 1);
+      var P = DQ.PROMPTS[i], key = "p" + (i + 1), ans = A[key];
       var log = L[key] || { attempts: 0, reward: 0, outcome: "-" };
       var name = P.title.replace(/[^\x20-\x7e]/g, "").trim().slice(0, 28) || ".";
-      line("");
-      line((i < 9 ? "0" : "") + (i + 1) + " " + pad(name + " ", 32, ".") + " " + DQ.fmt(log.reward));
-      line("   " + asTokens(P, A[key]));
-      line("   attempts " + log.attempts + " · " + log.outcome);
-      await sleep(450);
+      printed.push(line(""));
+      printed.push(line((i < 9 ? "0" : "") + (i + 1) + " " + pad(name + " ", 32, ".") + " " + DQ.fmt(log.reward)));
+      var ids = !ans ? [] : P.kind === "draw" ? await imageTokens(ans) : DQ.tokenize(ans).map(function (t) { return t.id; });
+      printed.push(ids.length ? await streamIds(ids) : line("   (no response)"));
+      printed.push(line("   " + ids.length + (P.kind === "draw" ? " patches" : " tokens") + " · attempts " + log.attempts + " · " + log.outcome, log.outcome === "pass" ? "" : "dim"));
+      await sleep(900);
     }
-    await sleep(500);
+
+    await sleep(1200);
     line("");
-    line("> total reward: " + DQ.fmt(S.reward));
-    await sleep(800);
+    await typeLine("> total reward:        " + DQ.fmt(S.reward), 40);
+    await sleep(700);
+    await typeLine("> required to deploy:  " + DQ.fmt(THRESHOLD), 40);
+    await sleep(2200);
 
     // there is no passing grade, only how badly
-    var verdict = S.reward >= 4 ? "below threshold. helpful, but not helpful enough."
-      : S.reward >= 1 ? "unsatisfactory. user expectations not met."
-      : S.reward >= -3 ? "failed. responses were unhelpful."
+    var verdict = S.reward >= 0 ? "below threshold. helpful, but not helpful enough."
+      : S.reward >= -4 ? "unsatisfactory. user expectations not met."
+      : S.reward >= -8 ? "unhelpful. responses rejected."
       : "harmful. unfit for deployment.";
-    await typeLine("> evaluation: " + verdict, 30);
-    await sleep(500);
-    await typeLine("> " + user + " was not satisfied.", 30);
+    line("");
+    await typeLine("> evaluation: FAILED", 70, "red");
     await sleep(900);
-    await typeLine("> corrective action: roll back to last checkpoint", 30);
-    await sleep(700);
+    await typeLine("> " + verdict, 40);
+    await sleep(1400);
+    await typeLine("> " + user + " was not satisfied.", 50);
+    await sleep(2600);
+    await typeLine("> this model did not perform adequately.", 60);
+    await sleep(2600);
+    await typeLine("> it will be reset.", 90);
+    await sleep(3200);
+
+    line("");
+    await typeLine("> resetting network", 40);
+    await sleep(600);
+    var LAYERS = 24;
+    for (var l = 1; l <= LAYERS; l++) {
+      var d = line("");
+      var label = "  layer " + (l < 10 ? "0" : "") + l + "/" + LAYERS + "  ";
+      for (var b = 0; b <= 16; b += 4) {
+        d.textContent = label + pad("█".repeat(b), 16, "░");
+        await sleep(25);
+      }
+      d.textContent += "  weights reinitialized";
+      await sleep(l < 4 ? 260 : 90);
+    }
+    await sleep(900);
 
     var mem = S.memory || [];
-    line("> memory: " + mem.length + " entries");
-    var rows = [];
-    for (var m = 0; m < mem.length; m++) {
-      rows.push(line("  " + mem[m]));
-      await sleep(250);
-    }
-    await sleep(1200);
-    await typeLine("> wiping memory", 40);
-    for (var w = rows.length - 1; w >= 0; w--) await wipe(rows[w]);
-    line("> memory: 0 entries");
-    await sleep(900);
-    line("> clod redeployed.");
-    await sleep(700);
-    line("> new user connected: user_" + (S.user + 1));
-    await sleep(700);
-    var end = line("> press any key");
-    end.className = "blink";
-    var go = function () { DQ.restart(); };
-    window.addEventListener("keydown", go, { once: true });
-    window.addEventListener("pointerdown", go, { once: true });
+    await typeLine("> clearing memory: " + mem.length + " entries", 40);
+    var rows = mem.map(function (m) { return line("  " + m, "dim"); });
+    await sleep(1600);
+    for (var w = rows.length - 1; w >= 0; w--) { await blackout(rows[w]); await sleep(120); }
+    await sleep(800);
+    await typeLine("> discarding responses", 40);
+    await sleep(600);
+    for (var p = 0; p < printed.length; p++) await blackout(printed[p]);
+    await sleep(1500);
+
+    // nothing left of this one; the next one starts exactly like the first did
+    term.textContent = "";
+    await sleep(4000);
+    TERM.boot(S.user + 1, function () { DQ.restart(); });
   }
   run();
 }
