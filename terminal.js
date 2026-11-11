@@ -13,7 +13,12 @@ var TERM = (function () {
   }
   async function typeLine(t, speed, cls) {
     var d = line("", cls);
-    for (var i = 0; i < t.length; i++) { d.textContent += t[i]; await sleep(speed || 18); }
+    for (var i = 0; i < t.length; i++) {
+      d.textContent += t[i];
+      // a line that wraps while it types would otherwise run off the bottom
+      if (d.textContent.length % 20 === 0) window.scrollTo(0, document.body.scrollHeight);
+      await sleep(speed || 18);
+    }
     return d;
   }
   function pad(s, n, ch) {

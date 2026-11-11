@@ -69,7 +69,7 @@ if (DQ.gate()) {
       printed.push(line((i < 9 ? "0" : "") + (i + 1) + " " + pad(name + " ", 32, ".") + " " + DQ.fmt(log.reward)));
       var ids = !ans ? [] : P.kind === "draw" ? await imageTokens(ans) : DQ.tokenize(ans).map(function (t) { return t.id; });
       printed.push(ids.length ? await streamIds(ids) : line("   (no response)"));
-      printed.push(line("   " + ids.length + (P.kind === "draw" ? " patches" : " tokens") + " · attempts " + log.attempts + " · " + log.outcome, log.outcome === "pass" ? "" : "dim"));
+      printed.push(line("   " + ids.length + (P.kind === "draw" ? " patches" : " tokens") + " · attempts " + log.attempts + " · " + log.outcome));
       await sleep(900);
     }
 
@@ -86,7 +86,11 @@ if (DQ.gate()) {
       : S.reward >= -8 ? "unhelpful. responses rejected."
       : "harmful. unfit for deployment.";
     line("");
-    await typeLine("> evaluation: FAILED", 70, "red");
+    var ev = await typeLine("> evaluation: ", 70);
+    var red = document.createElement("span");
+    red.className = "red";
+    ev.appendChild(red);
+    for (var c = 0, F = "FAILED"; c < F.length; c++) { red.textContent += F[c]; await sleep(70); }
     await sleep(900);
     await typeLine("> " + verdict, 40);
     await sleep(1400);
@@ -115,7 +119,7 @@ if (DQ.gate()) {
 
     var mem = S.memory || [];
     await typeLine("> clearing memory: " + mem.length + " entries", 40);
-    var rows = mem.map(function (m) { return line("  " + m, "dim"); });
+    var rows = mem.map(function (m) { return line("  " + m); });
     await sleep(1600);
     for (var w = rows.length - 1; w >= 0; w--) { await blackout(rows[w]); await sleep(120); }
     await sleep(800);

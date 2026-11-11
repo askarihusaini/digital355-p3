@@ -482,7 +482,7 @@
     ta.placeholder = P.placeholder || "";
     ta.value = lastValue || "";
     var bar = el("div", "bar");
-    var send = el("button", "send", "send ↵");
+    var send = el("button", "send", P.kind === "code" ? "send ctrl+↵" : "send ↵");
     send.type = "button";
     bar.appendChild(send);
     b.appendChild(ta);
@@ -494,8 +494,13 @@
       ta.style.height = ta.scrollHeight + "px";
     }
     ta.addEventListener("input", grow);
+    // Enter sends and Shift+Enter is a new line. Code needs Enter for new lines, so it sends with Ctrl/Cmd+Enter.
     ta.addEventListener("keydown", function (e) {
-      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) send.click();
+      if (e.key !== "Enter" || e.isComposing) return;
+      if (e.ctrlKey || e.metaKey || (P.kind !== "code" && !e.shiftKey)) {
+        e.preventDefault();
+        send.click();
+      }
     });
     send.onclick = function () {
       var v = ta.value.trim();
@@ -650,6 +655,14 @@
     });
     cv.addEventListener("pointerup", function () { drawing = false; });
 
+    // Enter sends a drawing too, unless you're typing into something else
+    function onEnter(e) {
+      if (!b.isConnected || !b.classList.contains("editing")) { window.removeEventListener("keydown", onEnter); return; }
+      if (e.key !== "Enter" || /^(TEXTAREA|INPUT|BUTTON)$/.test(e.target.tagName) || document.querySelector(".modal-bg")) return;
+      e.preventDefault();
+      send.click();
+    }
+    window.addEventListener("keydown", onEnter);
     send.onclick = function () {
       if (!inked) return;
       var meta = measure(ctx);
