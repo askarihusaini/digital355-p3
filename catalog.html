@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Clod Catalog</title>
+<script>
+  // dev-only: works when the file is opened from disk (or a local server), never on the live site
+  if (!(location.protocol === "file:" || /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname))) location.replace("index.html");
+</script>
+<style>
+  :root {
+    --bg: #1d1d1c; --card: #242423; --ink: #f2f1ec; --mute: #a19f97; --line: #333331;
+    --field: #2c2c2a; --accent: #c96442; --bad: #e5655b; --good: #6cc38b;
+    --t1: #6cc38b; --t2: #c9b458; --t3: #d98a4a; --t4: #e5655b; --t5: #b45ad6;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 24px 16px 80px; }
+  h1 { font: 600 22px/1.2 Georgia, serif; margin: 0 0 4px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--mute); margin: 36px 0 12px; display: flex; gap: 10px; align-items: baseline; }
+  h2 small { text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .sub { color: var(--mute); margin: 0 0 20px; }
+  button { font: inherit; color: var(--ink); background: var(--field); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  button:hover { border-color: var(--mute); }
+  button.go { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .stats { color: var(--mute); margin-bottom: 12px; }
+  .stats b { color: var(--ink); font-weight: 500; }
+  ol.session { margin: 12px 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 6px; }
+  ol.session li { display: flex; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 8px; background: var(--field); }
+  ol.session li.cur { outline: 1px solid var(--accent); }
+  ol.session .n { color: var(--mute); width: 1.6em; text-align: right; font-variant-numeric: tabular-nums; }
+  ol.session .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  ol.session button { padding: 2px 8px; font-size: 12px; }
+  nav.tiers { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 10px 0; border-bottom: 1px solid var(--line); margin-top: 20px; }
+  nav.tiers a { color: var(--mute); text-decoration: none; margin-right: 14px; }
+  nav.tiers a:hover { color: var(--ink); }
+  .card { background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--tc); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+  .head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 6px; }
+  .head h3 { margin: 0; font: 600 17px/1.3 Georgia, serif; flex: 1 1 200px; }
+  .tag { font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--mute); white-space: nowrap; }
+  .tag.tier { color: var(--tc); border-color: var(--tc); }
+  .tag.fin { color: var(--t5); border-color: var(--t5); }
+  .tag.live { color: var(--accent); border-color: var(--accent); }
+  code, .mono { font-family: Consolas, "Courier New", monospace; font-size: 12.5px; }
+  .about { margin: 0 0 12px; }
+  .intro { margin: 0 0 12px; padding: 8px 12px; border-radius: 10px; background: var(--field); color: var(--ink); font-style: italic; }
+  .facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0 0 12px; }
+  .facts dt { color: var(--mute); }
+  .facts dd { margin: 0; }
+  .sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 3px; border: 1px solid rgba(255,255,255,.15); }
+  table { width: 100%; border-collapse: collapse; margin: 0 0 12px; }
+  th, td { text-align: left; vertical-align: top; padding: 6px 8px; border-top: 1px solid var(--line); }
+  th { color: var(--mute); font-weight: 500; font-size: 12px; }
+  td.k { white-space: nowrap; }
+  td .h { color: var(--mute); display: block; }
+  details { margin-bottom: 8px; }
+  summary { cursor: pointer; color: var(--mute); }
+  details ul { margin: 6px 0 0; padding-left: 20px; }
+  .thumb { display: block; max-width: 240px; width: 100%; border-radius: 8px; margin: 4px 0; border: 1px solid var(--line); }
+  pre.file { background: var(--field); padding: 8px 10px; border-radius: 8px; max-height: 160px; overflow: auto; white-space: pre-wrap; margin: 4px 0; }
+  .foot { display: flex; justify-content: flex-end; }
+  @media (max-width: 600px) {
+    .facts { grid-template-columns: 1fr; }
+    .facts dt { margin-top: 6px; }
+    td.k { white-space: normal; }
+  }
+</style>
+</head>
+<body data-view="catalog">
+<div class="wrap">
+  <h1>Clod: prompt catalog</h1>
+  <p class="sub">Dev page. It isn't linked from the site and only opens from disk or localhost. Opening a chat here starts a new session with that prompt in its tier's slot. The other nine are drawn randomly as usual.</p>
+
+  <div class="panel">
+    <div class="stats" id="stats"></div>
+    <ol class="session" id="session"></ol>
+    <div class="row">
+      <button id="new">New random session</button>
+      <button id="end">Jump to end page</button>
+      <button id="home">Landing page</button>
+      <button id="wipe">Clear saved state</button>
+    </div>
+  </div>
+
+  <nav class="tiers" id="nav"></nav>
+  <div id="list"></div>
+</div>
+
+<script src="prompts.js"></script>
+<script src="app.js"></script>
+<script>
+(function () {
+  var S = DQ.state, R = DQ.REWARD;
+  var TIER = { 1: "friendly", 2: "curt", 3: "hostile", 4: "abusive", 5: "cruel" };
+  var KIND = { text: "Text reply", code: "Code editor", draw: "Drawing" };
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function go(url) { location.href = url; }
+
+  // ---------- current session ----------
+  document.getElementById("stats").innerHTML = "";
+  var st = document.getElementById("stats");
+  [["user", "user_" + S.user], ["progress", Math.min(S.progress, 11) + " / 11"], ["reward", DQ.fmt(S.reward)], ["memories", S.memory.length]].forEach(function (p, i) {
+    if (i) st.appendChild(document.createTextNode(" · "));
+    st.appendChild(document.createTextNode(p[0] + " "));
+    st.appendChild(el("b", "", String(p[1])));
+  });
+  var ol = document.getElementById("session");
+  DQ.PROMPTS.forEach(function (p, i) {
+    var li = el("li", S.progress === i + 1 ? "cur" : "");
+    li.appendChild(el("span", "n", String(i + 1)));
+    li.appendChild(el("span", "t", p.title));
+    li.appendChild(el("span", "tag", "T" + p.tier + " · " + p.kind));
+    var b = el("button", "", "jump");
+    b.title = "Mark the chats before this one as reached and open it";
+    b.onclick = function () { go(DQ.jump(i + 1)); };
+    li.appendChild(b);
+    ol.appendChild(li);
+  });
+  document.getElementById("new").onclick = function () { DQ.reset(); location.reload(); };
+  document.getElementById("end").onclick = function () { go(DQ.jump(11)); };
+  document.getElementById("home").onclick = function () { go("index.html"); };
+  document.getElementById("wipe").onclick = function () {
+    try { localStorage.removeItem("clod_state_v1"); } catch (e) {}
+    location.reload();
+  };
+
+  // ---------- the pool ----------
+  var nav = document.getElementById("nav"), list = document.getElementById("list");
+  var live = {};
+  S.order.forEach(function (id, i) { live[id] = i + 1; });
+
+  for (var t = 1; t <= 5; t++) {
+    var tier = DQ.POOL.filter(function (p) { return p.tier === t; });
+    var a = el("a", "", "Tier " + t + " (" + tier.length + ")");
+    a.href = "#tier" + t;
+    nav.appendChild(a);
+    var pat = DQ.PATIENCE[t];
+    var h = el("h2");
+    h.id = "tier" + t;
+    h.style.color = "var(--t" + t + ")";
+    h.appendChild(document.createTextNode("Tier " + t + " · " + TIER[t]));
+    h.appendChild(el("small", "", "slots " + (2 * t - 1) + "–" + (2 * t) + " · nags at " + pat.nags.join("s, ") + "s · gives up at " + pat.quit + "s"));
+    list.appendChild(h);
+    tier.forEach(function (p) { list.appendChild(card(p)); });
+  }
+
+  function card(p) {
+    var c = el("div", "card");
+    c.style.setProperty("--tc", "var(--t" + p.tier + ")");
+
+    var head = el("div", "head");
+    head.appendChild(el("h3", "", p.title));
+    head.appendChild(el("span", "tag tier", "Tier " + p.tier));
+    head.appendChild(el("span", "tag", p.kind));
+    if (p.finale) head.appendChild(el("span", "tag fin", "finale"));
+    if (live[p.id]) head.appendChild(el("span", "tag live", "in current session · slot " + live[p.id]));
+    head.appendChild(el("code", "tag", p.id));
+    c.appendChild(head);
+
+    c.appendChild(el("p", "about", p.about || ""));
+    c.appendChild(el("p", "intro", "“" + p.intro + "”"));
+
+    var dl = el("dl", "facts");
+    function fact(k, v) {
+      dl.appendChild(el("dt", "", k));
+      var dd = el("dd");
+      if (typeof v === "string") dd.textContent = v; else dd.appendChild(v);
+      dl.appendChild(dd);
+    }
+    fact("Response", format(p));
+    if (p.draw) {
+      var pal = el("span");
+      p.draw.palette.forEach(function (col) {
+        var s = el("span", "sw");
+        s.style.background = col;
+        s.title = col;
+        pal.appendChild(s);
+      });
+      pal.appendChild(el("span", "mono", "  " + p.draw.palette.join(" ")));
+      fact("Palette", pal);
+    }
+    if (p.attach) fact("Attachment", attachment(p));
+    var best = p.arbitrary * R.fail + R.pass;
+    fact("Guaranteed fails", p.arbitrary + (p.arbitrary === 1 ? " (the first attempt always fails)" : p.arbitrary ? " (the first " + p.arbitrary + " attempts always fail)" : " (it can pass on the first try)"));
+    fact("Best reward", DQ.fmt(best) + " (pass on attempt " + (p.arbitrary + 1) + " with no nags). Forced through on attempt " + DQ.MAX_ATTEMPTS + " for " + DQ.fmt(R.fail * (DQ.MAX_ATTEMPTS - 1) + R.forced) + ".");
+    c.appendChild(dl);
+
+    var tbl = el("table");
+    var tr = el("tr");
+    ["check", "passes when…", "what the prompter hints"].forEach(function (x) { tr.appendChild(el("th", "", x)); });
+    tbl.appendChild(tr);
+    Object.keys(p.rules || {}).forEach(function (k) {
+      var row = el("tr");
+      row.appendChild(el("td", "k mono", k));
+      row.appendChild(el("td", "", p.rules[k]));
+      var hc = el("td");
+      ((p.hints && p.hints[k]) || []).forEach(function (x) { hc.appendChild(el("span", "h", "“" + x + "”")); });
+      row.appendChild(hc);
+      tbl.appendChild(row);
+    });
+    c.appendChild(tbl);
+
+    c.appendChild(listBlock("Rejections (one per failed attempt)", p.rejects));
+    c.appendChild(listBlock("Endings", ["pass: “" + p.accept + "”", "forced: “" + p.forced + "”"]));
+    c.appendChild(listBlock("Memory", ["pass: " + p.memory.pass, "fail: " + p.memory.fail]));
+
+    var foot = el("div", "foot");
+    var b = el("button", "go", "Open this chat →");
+    b.onclick = function () { go(DQ.preview(p.id)); };
+    foot.appendChild(b);
+    c.appendChild(foot);
+    return c;
+  }
+
+  function format(p) {
+    if (p.kind === "code") return "Code editor (" + (p.file || "index.html") + "), graded on the source text";
+    if (p.kind === "draw") {
+      var on = p.draw.base ? " painted over a photo" + (p.draw.watermark ? " with a STOCKIMG watermark" : "") : " on a blank canvas";
+      return "Drawing, " + DQ.W + "×" + DQ.H + "," + on;
+    }
+    var s = "Text reply";
+    if (p.placeholder) s += " (box says “" + p.placeholder + "”)";
+    if (p.attach && p.attach.mustRead) s += ". Locked until the attached file is scrolled to the bottom";
+    return s;
+  }
+
+  function attachment(p) {
+    var a = p.attach, w = el("div");
+    w.appendChild(el("span", "mono", a.name + " (" + a.type + ")"));
+    if (a.type === "tweet") {
+      w.appendChild(el("div", "", a.text));
+    } else if (a.type === "file") {
+      w.appendChild(el("pre", "file mono", a.text));
+    } else if (a.type === "image") {
+      var cv = el("canvas", "thumb");
+      cv.width = DQ.W;
+      cv.height = DQ.H;
+      var ctx = cv.getContext("2d");
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, DQ.W, DQ.H);
+      var paint = a.paint || (p.draw && p.draw.base);
+      if (paint) paint(ctx, DQ.W, DQ.H);
+      w.appendChild(cv);
+    }
+    return w;
+  }
+
+  function listBlock(title, items) {
+    var d = el("details");
+    d.appendChild(el("summary", "", title));
+    var ul = el("ul");
+    items.forEach(function (x) { ul.appendChild(el("li", "", x)); });
+    d.appendChild(ul);
+    return d;
+  }
+})();
+</script>
+</body>
+</html>

@@ -39,16 +39,61 @@
   // the prompter keeps turning the effort up
   var EFFORT = { 1: "Medium", 2: "Medium", 3: "High", 4: "High", 5: "Max" };
 
-  var PAGES = PROMPTS.map(function (p, i) { return "prompt" + (i + 1) + ".html"; });
+  var SLOTS = 10;
+  var PAGES = [];
+  for (var s = 1; s <= SLOTS; s++) PAGES.push("prompt" + s + ".html");
   PAGES.push("end.html");
   var page = +document.body.dataset.prompt;
   var storageOk = true;
 
-  function fresh(user) { return { progress: 1, answers: {}, log: {}, reward: 0, memory: [], user: user || 4471 }; }
+  function byId(id) {
+    for (var i = 0; i < POOL.length; i++) if (POOL[i].id === id) return POOL[i];
+    return null;
+  }
+  function shuffle(a) {
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1)), t = a[i];
+      a[i] = a[j];
+      a[j] = t;
+    }
+    return a;
+  }
+  // two per tier, so it always escalates. Each prompt has a role inside its tier and no two picks share one:
+  // tier 1 is one text then one drawing, tier 5 is one ordinary prompt then one finale,
+  // tiers 2-4 never pair two drawings or two code prompts (any two texts are fine).
+  function role(p) {
+    if (p.tier === 1) return p.kind === "draw" ? "draw" : "text";
+    if (p.tier === 5) return p.finale ? "finale" : "main";
+    return p.kind === "text" ? "text:" + p.id : p.kind;
+  }
+  function rank(p) { return (p.tier === 1 && p.kind === "draw") || p.finale ? 1 : 0; }
+  // force: a prompt that has to be in this session (used by catalog.html)
+  function pickOrder(force) {
+    var order = [];
+    for (var t = 1; t <= 5; t++) {
+      var pool = shuffle(POOL.filter(function (p) { return p.tier === t; }));
+      if (force && force.tier === t) {
+        pool.splice(pool.indexOf(force), 1);
+        pool.unshift(force);
+      }
+      var picks = [], roles = [];
+      pool.forEach(function (p) {
+        if (picks.length < 2 && roles.indexOf(role(p)) < 0) { picks.push(p); roles.push(role(p)); }
+      });
+      picks.sort(function (a, b) { return rank(a) - rank(b); });
+      picks.forEach(function (p) { order.push(p.id); });
+    }
+    return order;
+  }
+  function validOrder(o) { return o && o.length === SLOTS && o.every(byId); }
+
+  function fresh(user, force) {
+    return { progress: 1, order: pickOrder(force), answers: {}, log: {}, reward: 0, memory: [], user: user || 4471 };
+  }
   function load() {
     try {
       var s = JSON.parse(localStorage.getItem(KEY));
-      return s && s.answers && s.memory ? s : fresh();
+      return s && s.answers && s.memory && validOrder(s.order) ? s : fresh(s && s.user);
     } catch (e) {
       storageOk = false;
       return fresh();
@@ -58,6 +103,9 @@
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { storageOk = false; }
   }
   var state = load();
+  save();
+  // this session's ten conversations, in order
+  var PROMPTS = state.order.map(byId);
 
   // gating: you can't skip ahead to a chat you haven't reached
   function gate() {
@@ -135,7 +183,30 @@
     } catch (e) {}
   }
 
-  window.DQ = { state: state, PROMPTS: PROMPTS, PAGES: PAGES, gate: gate, restart: restart, tokenize: tokenize, rng: rng, fmt: fmt };
+  // catalog.html only: start a session with a given prompt in it, and jump straight to that chat
+  function preview(id) {
+    var p = byId(id);
+    state = fresh(state.user, p);
+    state.progress = state.order.indexOf(id) + 1;
+    save();
+    return PAGES[state.progress - 1];
+  }
+  function jump(slot) {
+    state.progress = slot;
+    save();
+    return PAGES[slot - 1];
+  }
+  function reset() {
+    state = fresh(state.user + 1);
+    save();
+  }
+
+  window.DQ = {
+    state: state, POOL: POOL, PROMPTS: PROMPTS, PAGES: PAGES, gate: gate, restart: restart,
+    tokenize: tokenize, rng: rng, fmt: fmt, role: role,
+    preview: preview, jump: jump, reset: reset,
+    REWARD: REWARD, PATIENCE: PATIENCE, MAX_ATTEMPTS: MAX_ATTEMPTS, W: W, H: H
+  };
 
   // the landing and end pages are terminals, not chats
   if (document.body.dataset.view) return;
@@ -143,7 +214,7 @@
   // ---------- the chat ----------
   var P, tier, thread, scroller, composer, rewardEl, newBtn, recentsEl, replyRow;
   var attempts = 0, delta = 0, done = false, nagIdx = 0, timers = [], hintsUsed = {};
-  var lastValue = null, lastMeta = null, colorsUsed = {}, fileGate = null, wm = null;
+  var lastValue = null, lastMeta = null, colorsUsed = {}, fileGate = null, ref = null;
   var queue = [], busy = false;
 
   if (!gate()) return;
@@ -350,7 +421,12 @@
       var c = el("canvas");
       c.width = W;
       c.height = H;
-      paintBase(c.getContext("2d"));
+      var cx = c.getContext("2d");
+      if (a.paint) {
+        cx.fillStyle = "#fff";
+        cx.fillRect(0, 0, W, H);
+        a.paint(cx, W, H);
+      } else paintBase(cx);
       var img = el("img");
       img.src = c.toDataURL("image/jpeg", 0.8);
       img.alt = a.name;
@@ -388,7 +464,7 @@
   }
 
   function textEditor(b) {
-    if (P.kind === "code") b.appendChild(el("div", "codehead", "index.html"));
+    if (P.kind === "code") b.appendChild(el("div", "codehead", P.file || "index.html"));
     var ta = el("textarea", P.kind === "code" ? "code" : "write");
     ta.spellcheck = P.kind !== "code";
     ta.placeholder = P.placeholder || "";
@@ -446,42 +522,53 @@
     }
     ctx.restore();
   }
-  // remember which pixels belong to the watermark, so we can tell how much of it is still showing
-  function prepWatermark() {
+  // remember what the canvas looked like before you touched it,
+  // and which pixels belong to the watermark, so we can tell how much of it is still showing
+  function prepRef() {
+    var r = el("canvas");
+    r.width = W;
+    r.height = H;
+    var rc = r.getContext("2d");
+    paintBase(rc);
+    ref = { data: rc.getImageData(0, 0, W, H).data, idx: null, mask: null };
+    if (!P.draw.watermark) return;
     var m = el("canvas");
     m.width = W;
     m.height = H;
     var mc = m.getContext("2d");
     drawWatermark(mc);
     var md = mc.getImageData(0, 0, W, H).data;
-    var r = el("canvas");
-    r.width = W;
-    r.height = H;
-    var rc = r.getContext("2d");
-    paintBase(rc);
     var idx = [], mask = new Uint8Array(W * H);
     for (var i = 0; i < md.length; i += 4) if (md[i + 3] > 100) { idx.push(i); mask[i >> 2] = 1; }
-    wm = { idx: idx, mask: mask, ref: rc.getImageData(0, 0, W, H).data };
+    ref.idx = idx;
+    ref.mask = mask;
   }
 
+  // colors: how many swatches you used; used: which ones; coverage: share of non-white pixels;
+  // changed: share of pixels that differ from the starting image; watermark/damage: only for the watermark prompt
   function measure(ctx) {
-    var d = ctx.getImageData(0, 0, W, H).data, inked = 0;
-    for (var i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] < 735) inked++;
-    var m = { colors: Object.keys(colorsUsed).length, coverage: inked / (W * H) };
-    if (wm) {
-      var vis = 0, dmg = 0;
-      var diff = function (k) { return Math.abs(d[k] - wm.ref[k]) + Math.abs(d[k + 1] - wm.ref[k + 1]) + Math.abs(d[k + 2] - wm.ref[k + 2]); };
-      for (var j = 0; j < wm.idx.length; j++) if (diff(wm.idx[j]) < 40) vis++;
-      // everything that wasn't watermark should still look like the photo
-      for (var k = 0; k < d.length; k += 4) if (!wm.mask[k >> 2] && diff(k) > 90) dmg++;
-      m.watermark = vis / wm.idx.length;
-      m.damage = dmg / (W * H - wm.idx.length);
+    var d = ctx.getImageData(0, 0, W, H).data, r = ref.data, inked = 0, changed = 0, dmg = 0;
+    var diff = function (k) { return Math.abs(d[k] - r[k]) + Math.abs(d[k + 1] - r[k + 1]) + Math.abs(d[k + 2] - r[k + 2]); };
+    for (var i = 0; i < d.length; i += 4) {
+      if (d[i] + d[i + 1] + d[i + 2] < 735) inked++;
+      if (diff(i) > 90) {
+        changed++;
+        // everything that wasn't watermark should still look like the photo
+        if (ref.mask && !ref.mask[i >> 2]) dmg++;
+      }
+    }
+    var m = { colors: Object.keys(colorsUsed).length, used: Object.keys(colorsUsed), coverage: inked / (W * H), changed: changed / (W * H) };
+    if (ref.idx) {
+      var vis = 0;
+      for (var j = 0; j < ref.idx.length; j++) if (diff(ref.idx[j]) < 40) vis++;
+      m.watermark = vis / ref.idx.length;
+      m.damage = dmg / (W * H - ref.idx.length);
     }
     return m;
   }
 
   function drawEditor(b) {
-    if (P.draw.watermark && !wm) prepWatermark();
+    if (!ref) prepRef();
     var cv = el("canvas", "paint");
     cv.width = W;
     cv.height = H;
