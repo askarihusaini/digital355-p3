@@ -10,5 +10,6 @@ body.end-view {
 #term { margin: 0; white-space: pre-wrap; word-break: break-all; }
 .dim { color: #1f8f1f; }
 .red { color: #ff4433; }
+.real { color: #fff; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; word-break: normal; }
 .blink::after { content: "\2588"; animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }

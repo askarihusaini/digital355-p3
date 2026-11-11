@@ -128,10 +128,11 @@ if (DQ.gate()) {
     for (var p = 0; p < printed.length; p++) await blackout(printed[p]);
     await sleep(1500);
 
-    // the only line here written for the visitor and not the model
+    // the only part of the site written for the visitor, not the model, so it doesn't look like the rest
     line("");
-    await typeLine("> if this was close to home: call or text 988 (us) · findahelpline.com", 25, "dim");
-    await sleep(6000);
+    line("If you're having thoughts of suicide or self-harm, please talk to someone.", "real");
+    line("Call or text 988 in the US, or find a local helpline at findahelpline.com", "real");
+    await sleep(10000);
 
     // nothing left of this one; the next one starts exactly like the first did
     term.textContent = "";
