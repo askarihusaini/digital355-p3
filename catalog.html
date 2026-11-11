@@ -162,13 +162,13 @@
     head.appendChild(el("h3", "", p.title));
     head.appendChild(el("span", "tag tier", "Tier " + p.tier));
     head.appendChild(el("span", "tag", p.kind));
-    if (p.finale) head.appendChild(el("span", "tag fin", "finale"));
+    if (p.finale) head.appendChild(el("span", "tag fin", "finale · unwinnable"));
     if (live[p.id]) head.appendChild(el("span", "tag live", "in current session · slot " + live[p.id]));
     head.appendChild(el("code", "tag", p.id));
     c.appendChild(head);
 
     c.appendChild(el("p", "about", p.about || ""));
-    c.appendChild(el("p", "intro", "“" + p.intro + "”"));
+    [].concat(p.intro).forEach(function (m) { c.appendChild(el("p", "intro", "“" + m + "”")); });
 
     var dl = el("dl", "facts");
     function fact(k, v) {
@@ -190,9 +190,15 @@
       fact("Palette", pal);
     }
     if (p.attach) fact("Attachment", attachment(p));
-    var best = p.arbitrary * R.fail + R.pass;
-    fact("Guaranteed fails", p.arbitrary + (p.arbitrary === 1 ? " (the first attempt always fails)" : p.arbitrary ? " (the first " + p.arbitrary + " attempts always fail)" : " (it can pass on the first try)"));
-    fact("Best reward", DQ.fmt(best) + " (pass on attempt " + (p.arbitrary + 1) + " with no nags). Forced through on attempt " + DQ.MAX_ATTEMPTS + " for " + DQ.fmt(R.fail * (DQ.MAX_ATTEMPTS - 1) + R.forced) + ".");
+    var forced = DQ.fmt(R.fail * (DQ.MAX_ATTEMPTS - 1) + R.forced);
+    if (p.finale) {
+      fact("Guaranteed fails", "all of them. It never passes. Every attempt is rejected (hints still come) until attempt " + DQ.MAX_ATTEMPTS + " forces it to end.");
+      fact("Best reward", forced + " (always forced through, minus any nags)");
+    } else {
+      fact("Guaranteed fails", p.arbitrary + (p.arbitrary === 1 ? " (the first attempt always fails)" : p.arbitrary ? " (the first " + p.arbitrary + " attempts always fail)" : " (it can pass on the first try)"));
+      fact("Best reward", DQ.fmt(p.arbitrary * R.fail + R.pass) + " (pass on attempt " + (p.arbitrary + 1) + " with no nags). Forced through on attempt " + DQ.MAX_ATTEMPTS + " for " + forced + ".");
+    }
+    if (p.hurry) fact("Nags", p.hurry.map(function (x) { return "“" + x + "”"; }).join(" · ") + " · gives up with “" + p.timeout + "”");
     c.appendChild(dl);
 
     var tbl = el("table");
@@ -211,7 +217,7 @@
     c.appendChild(tbl);
 
     c.appendChild(listBlock("Rejections (one per failed attempt)", p.rejects));
-    c.appendChild(listBlock("Endings", ["pass: “" + p.accept + "”", "forced: “" + p.forced + "”"]));
+    c.appendChild(listBlock("Endings", p.finale ? ["forced: “" + p.forced + "”"] : ["pass: “" + p.accept + "”", "forced: “" + p.forced + "”"]));
     c.appendChild(listBlock("Memory", ["pass: " + p.memory.pass, "fail: " + p.memory.fail]));
 
     var foot = el("div", "foot");

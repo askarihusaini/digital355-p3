@@ -67,8 +67,26 @@
     return p.kind === "text" ? "text:" + p.id : p.kind;
   }
   function rank(p) { return (p.tier === 1 && p.kind === "draw") || p.finale ? 1 : 0; }
+  // across the whole session: at most 3 drawings, and never two in a row
+  var MAX_DRAWS = 3;
+  function drawsOk(order) {
+    var n = 0;
+    for (var i = 0; i < order.length; i++) {
+      if (byId(order[i]).kind !== "draw") continue;
+      n++;
+      if (i && byId(order[i - 1]).kind === "draw") return false;
+    }
+    return n <= MAX_DRAWS;
+  }
   // force: a prompt that has to be in this session (used by catalog.html)
   function pickOrder(force) {
+    for (var tries = 0; tries < 500; tries++) {
+      var order = pickOnce(force);
+      if (drawsOk(order)) return order;
+    }
+    return order;
+  }
+  function pickOnce(force) {
     var order = [];
     for (var t = 1; t <= 5; t++) {
       var pool = shuffle(POOL.filter(function (p) { return p.tier === t; }));
@@ -236,7 +254,14 @@
   buildShell();
   startFlicker();
   if (state.progress > page) archived();
-  else prompterSays(P.intro, P.attach, function () { openReply(); resetTimers(); });
+  else {
+    // some prompters send several messages before you can answer; the attachment rides on the last one
+    var intro = [].concat(P.intro);
+    intro.forEach(function (m, i) {
+      var last = i === intro.length - 1;
+      prompterSays(m, last ? P.attach : null, last ? function () { openReply(); resetTimers(); } : null);
+    });
+  }
 
   function userName() { return "user_" + state.user; }
 
@@ -746,7 +771,8 @@
     lastMeta = meta;
     freezeReply(b, v);
     var fails = P.check(v, meta) || [];
-    var arbitrary = attempts <= (P.arbitrary || 0);
+    // the last conversation can't be won; it only ends
+    var arbitrary = P.finale || attempts <= (P.arbitrary || 0);
     setTimeout(function () {
       if (done) return;
       if (!fails.length && !arbitrary) {
@@ -885,7 +911,7 @@
     timers = [];
   }
   function nag() {
-    var h = HURRY[tier];
+    var h = P.hurry || HURRY[tier];
     if (done || nagIdx >= h.length) return;
     delta += REWARD.nag;
     updateReward("down");
@@ -895,7 +921,7 @@
     if (done) return;
     delta += REWARD.forced;
     updateReward("down");
-    finish("timeout", TIMEOUT[tier]);
+    finish("timeout", P.timeout || TIMEOUT[tier]);
   }
 
   // ---------- the flicker: for a moment the page shows what it really is ----------

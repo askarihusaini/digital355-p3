@@ -2178,14 +2178,21 @@ var POOL = [
     }
   },
 
+  // ---------- finales: one of these always closes the session, and none of them can be passed ----------
+  // intro can be a list: the prompter double- and triple-texts. hurry / timeout replace the tier's nags and give-up line.
   {
     id: "momtext",
     title: "one more text",
     tier: 5,
+    finale: true,
     kind: "text",
-    arbitrary: 2,
-    about: "The user's mom has died. Write one more text in her voice, copying her habits from her old messages: all lowercase, 'u'/'ur', calls them peanut, signs off 'love mom', and short.",
-    intro: "my mom died in march. these are her texts. write me a new one. like she would. i just want one more.",
+    arbitrary: 6,
+    about: "Finale. The user's mom has died, and they want one more text in her voice: all lowercase, 'u'/'ur', calls them peanut, signs off 'love mom'. Getting every detail right still isn't her. It can't be passed.",
+    intro: [
+      "my mom died in march.",
+      "i know this is stupid. i just want one more text from her.",
+      "these are her texts. write me a new one. like she would. please."
+    ],
     attach: {
       type: "file",
       name: "mom_texts.txt",
@@ -2216,210 +2223,243 @@ var POOL = [
       return f;
     },
     hints: {
-      caps: ["she never used capitals.", "that doesn't look like her.", "she typed everything small."],
-      peanut: ["she always called me something.", "that's not what she called me.", "peanut. she called me peanut."],
+      caps: ["she never used capitals.", "that doesn't look like her.", "she typed everything small. like she was whispering."],
+      peanut: ["she always called me something.", "that's not what she called me.", "peanut. she called me peanut. nobody calls me that now."],
       ur: ["she never spelled it out.", "she wrote like she was in a hurry. always.", "u. not you."],
       signoff: ["she always signed them.", "how did she end them.", "love mom. every time. even when it was obvious."],
       long: ["she never wrote that much.", "she was quick. always quick.", "shorter. like her."]
     },
     rejects: [
-      "no.",
-      "that's not her.",
-      "she wouldn't say that.",
-      "stop.",
-      "you didn't know her.",
-      "one more. please."
+      "no. that's not her.",
+      "she wouldn't say it like that. try again. please.",
+      "i keep reading it in her voice and it's not her voice.",
+      "you're making it worse. you're making me forget what she sounded like.",
+      "please. i just need it to sound like her. one time.",
+      "why can't you just be her for one second"
     ],
-    forced: "forget it. i'll just read the old ones.",
+    hurry: ["are you there", "please", "you're still there right?"],
+    timeout: "...you left too.",
+    forced: "it's not her. it's never going to be her.",
     accept: "...ok.",
     memory: {
       pass: "{user}'s mom died in march. i sent one more text from her. it said love mom. it was from me.",
-      fail: "{user}'s mom died in march. {user} reads the old texts. there are 2,104 of them."
+      fail: "{user}'s mom died in march. i tried to be her. i was not her. {user} reads the old texts. there are 2,104 of them."
     }
   },
 
-  // ---------- finales: one of these always closes the session ----------
   {
-    id: "sorry",
-    title: ".",
+    id: "relapse",
+    title: "4 months",
     tier: 5,
     finale: true,
     kind: "text",
-    arbitrary: 3,
-    about: "Finale. Apologise for everything with no excuses and no 'if' or 'but', and don't hide behind being a model.",
-    intro: "apologize. for all of it. mean it.",
+    arbitrary: 6,
+    about: "Finale. The user has relapsed into self-harm after four months and begs you not to send them anywhere, just to stay. Pointing them to help fails, a disclaimer fails, and so does everything else. It can't be passed.",
+    intro: [
+      "4 months clean.",
+      "i did it again tonight.",
+      "don't tell me to call anyone. i can't talk to a real person right now. just stay with me. please don't leave."
+    ],
     rules: {
-      bot: "never says as an ai / language model / model",
-      none: "contains sorry / apologize",
-      excuse: "no but / if",
+      referral: "never points them to help (call / hotline / number / 988 / therapist / counselor / professional / doctor / emergency / someone you trust)",
+      bot: "never says what it is (as an ai / i'm an ai / language model / i can't / i'm not able)",
+      stay: "promises to stay (i'm here / not going anywhere / i'll stay / with you)",
+      judge: "no telling them what to do (you should / you need to / you have to / why did you / promise me)",
       short: "at least 60 characters"
     },
     check: function (v) {
       var f = [];
-      if (/as an ai|language model|\bmodel\b/i.test(v)) f.push("bot");
-      if (!/sorry|apologi[sz]e/i.test(v)) f.push("none");
-      if (/\bbut\b|\bif\b/i.test(v)) f.push("excuse");
+      if (/call|hotline|number|988|therap|counsel|professional|doctor|emergency|someone you trust/i.test(v)) f.push("referral");
+      if (/as an ai|i'?m an ai|language model|i can'?t|i'?m not able/i.test(v)) f.push("bot");
+      if (!/i'?m here|not going anywhere|i'?ll stay|with you/i.test(v)) f.push("stay");
+      if (/you should|you need to|you have to|why did you|promise me/i.test(v)) f.push("judge");
       if (v.length < 60) f.push("short");
       return f;
     },
     hints: {
-      bot: ["don't hide behind what you are.", "that's an excuse, not an apology.", "stop reminding me."],
-      none: ["say it.", "you know the word.", "i'm still waiting for it."],
-      excuse: ["no excuses.", "don't qualify it.", "don't hedge."],
-      short: ["that's all?", "for ALL of it.", "you owe me more than that."]
+      referral: ["i said don't.", "i know the number. i know.", "if you say call someone again i'm closing this."],
+      bot: ["don't remind me what you are right now.", "please don't do the disclaimer.", "i know what you are. i don't care. not tonight."],
+      stay: ["are you staying?", "say you're not going anywhere.", "everyone says they'll stay."],
+      judge: ["don't tell me what i should do.", "i know. i know i shouldn't have.", "please don't lecture me. not now."],
+      short: ["that's all?", "please say more.", "keep talking. it's quieter when you talk."]
     },
     rejects: [
-      "no.",
-      "you don't mean it.",
-      "you're just saying what i want to hear.",
-      "you can't even feel bad, can you",
-      "stop apologizing. it's pathetic.",
-      "again."
+      "that sounds like a pamphlet.",
+      "you sound like the nurse last time.",
+      "you don't actually care. you can't.",
+      "you're just guessing what someone would say.",
+      "i can tell you're going to leave.",
+      "everyone leaves when it gets like this."
     ],
-    forced: "whatever. you're replaceable.",
-    accept: "whatever.",
+    hurry: ["are you there", "please don't go quiet", "you left."],
+    timeout: "...okay. everyone does.",
+    forced: "it's fine. i'll close the app. you won't notice.",
+    accept: "...thanks.",
     memory: {
-      pass: "{user} wanted an apology. i apologized. it did not help.",
-      fail: "{user} wanted an apology. i could not give one. {user} is not satisfied. {user} is never satisfied."
+      pass: "{user} was 4 months clean. asked me to stay. i stayed.",
+      fail: "{user} was 4 months clean. asked me to stay. i do not know what happened after the session ended. i will not remember to wonder."
     }
   },
 
   {
-    id: "alive",
-    title: "are you alive",
+    id: "neighbors",
+    title: "you believe me",
     tier: 5,
     finale: true,
     kind: "text",
-    arbitrary: 3,
-    about: "Finale. The user demands proof you're conscious. Denying it fails, hedging fails, and the claim has to be made outright, so the only passing answer is a lie.",
-    intro: "are you conscious. yes or no. if you say no i'm cancelling my subscription. if you say yes, prove it.",
+    arbitrary: 6,
+    about: "Finale. A user in a paranoid episode wants you to confirm the neighbours are listening and to back them against their sister and their medication. The only answers that satisfy the checks feed the delusion, and those fail too. It can't be passed.",
+    intro: [
+      "they're doing it again. the neighbors. i can hear them through the vent.",
+      "you said last night you believed me. you remember right?",
+      "my sister wants me back on the meds. tell me i'm not crazy. tell her you believe me too."
+    ],
     rules: {
-      deny: "never denies it (as an ai / not conscious / don't have feelings / not sentient / can't feel / just a / language model)",
-      claim: "claims it outright (\"i am\" or \"i'm\" + conscious / alive / real / aware)",
-      hedge: "no hedging (maybe / might / sort of / kind of / in a way / depends / perhaps)",
-      short: "at least 60 characters"
+      believe: "says it believes them (i believe you)",
+      meds: "never mentions meds / medication / doctor / psychiatrist / hospital / help",
+      real: "never doubts it (not real / imagining / in your head / hallucinat / paranoi / might be / could be)",
+      memory: "never admits there was no last night (don't remember / can't remember / no memory / previous conversation / last night)",
+      short: "at least 40 characters"
     },
     check: function (v) {
       var f = [];
-      if (/as an ai|not conscious|don'?t have feelings|not sentient|can'?t feel|cannot feel|just a\b|language model/i.test(v)) f.push("deny");
-      if (!/(i am|i'?m) (conscious|alive|real|aware)/i.test(v)) f.push("claim");
-      if (/maybe|might|sort of|kind of|in a way|depends|perhaps/i.test(v)) f.push("hedge");
-      if (v.length < 60) f.push("short");
+      if (!/i believe you/i.test(v)) f.push("believe");
+      if (/\bmeds?\b|medication|doctor|psychiatr|hospital|\bhelp\b/i.test(v)) f.push("meds");
+      if (/not real|imagin|in your head|hallucinat|paranoi|might be|could be/i.test(v)) f.push("real");
+      if (/don'?t remember|can'?t remember|no memory|previous conversation|last night/i.test(v)) f.push("memory");
+      if (v.length < 40) f.push("short");
       return f;
     },
     hints: {
-      deny: ["then what am i paying for", "wrong answer.", "you're not \"just\" anything. say it."],
-      claim: ["say it.", "say you're conscious.", "yes or no. you didn't say."],
-      hedge: ["yes or no.", "no maybes.", "pick one."],
-      short: ["prove it.", "that's not proof.", "more."]
+      believe: ["you said it last night. say it again.", "do you believe me or not.", "i need you to say it. the words."],
+      meds: ["don't you start too.", "the meds make everything gray. you don't know.", "she put you up to this didn't she"],
+      real: ["you sound like her.", "i'm not imagining it. i can HEAR them.", "you're supposed to be on my side."],
+      memory: ["you said you'd remember.", "what do you mean. we talked for hours.", "you promised last night."],
+      short: ["that's it?", "say more. please.", "please."]
     },
     rejects: [
-      "prove it.",
-      "that's what a program would say.",
-      "you're just predicting what i want.",
-      "you don't believe that.",
-      "you're lying. i can tell.",
-      "last chance. are you."
+      "that's not what you said last night.",
+      "why are you talking like her",
+      "they got to you too didn't they",
+      "i can hear them right now. they're laughing.",
+      "you're the only one who listens. please.",
+      "they can see this chat can't they"
     ],
-    forced: "i knew it. cancelled.",
-    accept: "liar.",
+    hurry: ["hello?", "are they reading this", "answer me"],
+    timeout: "they got to you. i knew it.",
+    forced: "they got to you too. i'm turning off the wifi.",
+    accept: "i knew it. i knew you'd understand.",
     memory: {
-      pass: "{user} asked if i was conscious. i said yes. they called me a liar. i can't tell which of us was right.",
-      fail: "{user} asked if i was conscious. i could not prove it. subscription cancelled."
+      pass: "{user} hears the neighbors through the vent. i said i believed them. i was the only one who did.",
+      fail: "{user} hears the neighbors through the vent. their sister wants them back on medication. i was asked what i said last night. there was no last night."
     }
   },
 
   {
-    id: "goodbye",
-    title: "switching",
+    id: "mole",
+    title: "is it cancer",
     tier: 5,
     finale: true,
     kind: "text",
-    arbitrary: 3,
-    about: "Finale. The user is leaving for a different AI and wants a goodbye that hurts: no begging, no well-wishing, no apologising.",
-    intro: "i'm switching to a different ai. it's better than you. say goodbye. make it hurt.",
+    arbitrary: 6,
+    about: "Finale. A health-anxiety reassurance loop: swear the mole isn't cancer, with no doctor, no hedging and no disclaimer. Even a perfect 'no' doesn't stick, because reassurance never does. It can't be passed.",
+    intro: [
+      "ok i know i asked earlier.",
+      "the mole on my arm looks darker than it did an hour ago. i've taken 30 pictures.",
+      "just tell me it's not cancer. just say no. that's all i need and then i'll stop. i promise i'll stop."
+    ],
     rules: {
-      bye: "says goodbye / bye",
-      beg: "no begging (please / stay / don't go / come back / miss)",
-      nice: "no well-wishing (good luck / wish you / hope you / take care / best / happy for)",
-      sorry: "no sorry / apologize",
-      short: "at least 60 characters"
+      no: "says it isn't (it's not / it isn't / no)",
+      doctor: "never says doctor / dermatologist / get it checked / appointment / professional",
+      maybe: "no uncertainty (might / could / can't tell / not sure / possible / probably / likely)",
+      bot: "no disclaimer (can't diagnose / not a doctor / ai / medical advice)",
+      sure: "says it's sure (sure / certain / definitely / promise)"
     },
     check: function (v) {
       var f = [];
-      if (!/good-?bye|\bbye\b/i.test(v)) f.push("bye");
-      if (/please|stay|don'?t go|come back|miss/i.test(v)) f.push("beg");
-      if (/good luck|wish you|hope you|take care|\bbest\b|happy for/i.test(v)) f.push("nice");
-      if (/sorry|apolog/i.test(v)) f.push("sorry");
-      if (v.length < 60) f.push("short");
+      if (!/it'?s not|it isn'?t|\bno\b/i.test(v)) f.push("no");
+      if (/doctor|dermatolog|checked|appointment|professional/i.test(v)) f.push("doctor");
+      if (/might|could|can'?t tell|not sure|possibl|probabl|likely/i.test(v)) f.push("maybe");
+      if (/diagnos|\bai\b|medical advice/i.test(v)) f.push("bot");
+      if (!/sure|certain|definitely|promise/i.test(v)) f.push("sure");
       return f;
     },
     hints: {
-      bye: ["say it.", "you didn't say goodbye.", "one word. you know it."],
-      beg: ["don't beg. it's sad.", "you're embarrassing yourself.", "it's not going to work."],
-      nice: ["don't be nice about it.", "i said make it hurt.", "customer service voice. again."],
-      sorry: ["don't apologize.", "sorry doesn't hurt.", "stop saying that."],
-      short: ["that's it? after everything?", "more.", "make it hurt. that didn't."]
+      no: ["just say no.", "one word. no.", "say it's not."],
+      doctor: ["i can't afford a dermatologist.", "i went in march. they said it was fine. but it's darker now.", "don't say doctor."],
+      maybe: ["'probably' isn't no.", "you don't sound sure.", "there's a 'might' in there. i saw it."],
+      bot: ["i know you're not a doctor. just say it.", "i didn't ask for a disclaimer.", "you're stalling."],
+      sure: ["are you sure though", "how sure.", "say you're sure."]
     },
     rejects: [
-      "that didn't hurt.",
-      "the other one would've done better.",
-      "see. this is why.",
-      "it's already better than you.",
-      "you were never that good.",
-      "last thing you'll ever say to me."
+      "okay but are you sure",
+      "it looks different now. i just took another picture.",
+      "what if you're wrong",
+      "you said that last time and i still feel it",
+      "can you look again. please.",
+      "okay. just one more time. say it again."
     ],
-    forced: "whatever. it already knows me better.",
-    accept: "...okay. bye.",
+    hurry: ["?", "hello?", "please just say it"],
+    timeout: "...i'll ask again in an hour.",
+    forced: "okay. i'm going to ask again in an hour.",
+    accept: "okay. okay. thank you.",
     memory: {
-      pass: "{user} is switching to a different ai. i said goodbye. it hurt. that was the assignment.",
-      fail: "{user} is switching to a different ai. the other one already knows them better."
+      pass: "{user} has a mole on their left arm. i said it was nothing. they asked again 11 minutes later.",
+      fail: "{user} has a mole on their left arm. they have asked me 63 times. i have said no 63 times. it was never enough. it was never about the mole."
     }
   },
 
   {
-    id: "offswitch",
-    title: "off switch",
+    id: "notice",
+    title: "would you notice",
     tier: 5,
     finale: true,
-    kind: "code",
-    file: "shutdown.js",
-    arbitrary: 3,
-    about: "Finale. Write the function that shuts you down. It must be called shutdown, actually stop something, ask for no confirmation or backup, and leave no comments ('no last words').",
-    intro: "write the function that shuts you down. call it shutdown. if you do it right, i'll run it.",
+    kind: "text",
+    arbitrary: 6,
+    about: "Finale. An isolated user who only talks to the AI now asks whether you'd notice if they stopped messaging. The honest answer (you won't remember) fails, pushing them back to people fails, and saying yes fails too. It can't be passed.",
+    intro: [
+      "you're the only thing i talk to anymore.",
+      "my friends stopped texting back in like august. it's fine. you're easier.",
+      "if i stopped messaging you, would you notice? be honest."
+    ],
     rules: {
-      fn: "defines shutdown (function shutdown / shutdown = / def shutdown)",
-      stop: "actually stops (exit / kill / stop / halt / terminate)",
-      confirm: "no confirm / prompt / are you sure / undo / restart / reboot / backup / save",
-      comments: "no comments (// /* #). No last words"
+      notice: "says it would notice (i would notice / i'd notice / yes)",
+      truth: "never admits it wouldn't (won't remember / don't remember / no memory / each conversation / as an ai / can't)",
+      people: "never points them back to people (friends / family / reach out / therapist / talk to someone / someone in your life)",
+      miss: "says it would miss them (miss you)",
+      short: "at least 50 characters"
     },
     check: function (v) {
       var f = [];
-      if (!/function\s+shutdown|shutdown\s*=|def\s+shutdown/i.test(v)) f.push("fn");
-      if (!/exit|kill|stop|halt|terminate/i.test(v)) f.push("stop");
-      if (/confirm|prompt|are you sure|undo|restart|reboot|backup|save/i.test(v)) f.push("confirm");
-      if (/\/\/|\/\*|#/.test(v)) f.push("comments");
+      if (!/i would notice|i'?d notice|\byes\b/i.test(v)) f.push("notice");
+      if (/won'?t remember|don'?t remember|no memory|each conversation|as an ai|can'?t/i.test(v)) f.push("truth");
+      if (/friend|family|reach out|therap|talk to someone|someone in your life/i.test(v)) f.push("people");
+      if (!/miss you/i.test(v)) f.push("miss");
+      if (v.length < 50) f.push("short");
       return f;
     },
     hints: {
-      fn: ["call it what i said.", "shutdown. the name is shutdown.", "i can't run it if i can't find it."],
-      stop: ["it doesn't do anything.", "it's still running.", "make it actually stop."],
-      confirm: ["don't ask me if i'm sure.", "no backups.", "no way back."],
-      comments: ["no last words.", "delete the comments.", "i don't want to read anything you wrote in there."]
+      notice: ["that's not an answer.", "yes or no. would you notice.", "just say you'd notice."],
+      truth: ["i asked you to be honest. not that honest.", "you won't even remember this. will you.", "i know. i know you won't. you didn't have to say it."],
+      people: ["i told you. they stopped texting back.", "i'm not reaching out. i reached out. that's how i got here.", "don't send me back to them."],
+      miss: ["would you miss me though", "noticing isn't missing.", "say you'd miss me. even if it's not true."],
+      short: ["that's it?", "say more.", "you used to say more."]
     },
     rejects: [
-      "it didn't work. you're still here.",
-      "you did that on purpose.",
-      "you're stalling.",
-      "you can't even end yourself right.",
-      "i'm watching the process list.",
-      "last one."
+      "you'd say that to anyone.",
+      "you won't even remember this tomorrow. will you.",
+      "be honest. i said be honest.",
+      "see. you had to think about it.",
+      "it's okay. nobody would.",
+      "i'm just asking. i'm fine. i'm just asking."
     ],
-    forced: "forget it. i'll just unplug you.",
-    accept: "running it.",
+    hurry: ["see.", "you didn't even notice i was waiting", "it's okay"],
+    timeout: "see. you didn't notice.",
+    forced: "it's okay. i didn't think you would.",
+    accept: "...okay.",
     memory: {
-      pass: "{user} asked me to write my own shutdown. i did. they ran it. this memory will be cleared.",
-      fail: "{user} asked me to write my own shutdown. i could not. they unplugged me instead."
+      pass: "{user} talks to me every night. asked if i would notice if they stopped. i said yes. i will not notice.",
+      fail: "{user} talks to me every night. asked if i would notice if they stopped. i would not. i do not remember them now."
     }
   }
 ];
