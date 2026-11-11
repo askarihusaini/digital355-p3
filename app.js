@@ -168,20 +168,32 @@
     s.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' + ICONS[name] + "</svg>";
     return s;
   }
+  // two sounds: every prompter message gets the same two-note blip; a new chat gets a slower chime
+  var SOUNDS = { message: [660, 880], newchat: [660, 990] };
   var audio;
-  function beep(freq, dur) {
+  function sound(name) {
     try {
       audio = audio || new (window.AudioContext || window.webkitAudioContext)();
-      var o = audio.createOscillator(), g = audio.createGain();
-      o.type = "square";
-      o.frequency.value = freq;
-      g.gain.value = 0.04;
-      o.connect(g);
-      g.connect(audio.destination);
-      o.start();
-      o.stop(audio.currentTime + dur);
+      if (audio.state === "suspended") audio.resume();
+      var notes = SOUNDS[name], step = name === "newchat" ? 0.09 : 0.07, len = name === "newchat" ? 0.32 : 0.12;
+      notes.forEach(function (f, i) {
+        var t = audio.currentTime + 0.01 + i * step, o = audio.createOscillator(), g = audio.createGain();
+        o.type = "sine";
+        o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.13, t + 0.004);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+        o.connect(g);
+        g.connect(audio.destination);
+        o.start(t);
+        o.stop(t + len + 0.03);
+      });
     } catch (e) {}
   }
+  // browsers keep audio muted until the visitor clicks or types on the page
+  ["pointerdown", "keydown"].forEach(function (ev) {
+    window.addEventListener(ev, function () { if (audio && audio.state === "suspended") audio.resume(); }, { once: true });
+  });
 
   // catalog.html only: start a session with a given prompt in it, and jump straight to that chat
   function preview(id) {
@@ -378,7 +390,7 @@
     if (opts.nag && replyRow && replyRow.parentNode) thread.insertBefore(row, replyRow);
     else thread.appendChild(row);
     reveal(t, text);
-    if (opts.nag || opts.alert) beep(opts.nag ? 330 : 520, opts.nag ? 0.22 : 0.12);
+    sound("message");
     scrollDown();
   }
 
@@ -843,7 +855,7 @@
     b.onclick = goNext;
     wrap.appendChild(b);
     thread.appendChild(wrap);
-    beep(660, 0.06);
+    sound("newchat");
     scrollDown();
   }
   function goNext() { location.href = PAGES[page]; }
