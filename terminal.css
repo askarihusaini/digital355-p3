@@ -9,7 +9,5 @@ body.end-view {
 .screen { max-width: 760px; margin: 0 auto; padding: 16px 16px calc(16px + 4.2em); }
 #term { margin: 0; white-space: pre-wrap; word-break: break-all; }
 .dim { color: #1f8f1f; }
-.red { color: #ff4433; }
-.real { color: #fff; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; word-break: normal; }
-.blink::after { content: "\2588"; animation: blink 1s steps(1) infinite; }
+.red { color: #ff4433; }.blink::after { content: "\2588"; animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
