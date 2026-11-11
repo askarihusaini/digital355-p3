@@ -20,7 +20,8 @@
   var S = DQ.state;
   await TERM.sleep(1200);
   if (S.progress > 1) {
-    await TERM.typeLine("> session in progress · user_" + S.user, 40);
+    var at = Math.min(S.progress, DQ.PROMPTS.length);
+    await TERM.typeLine("> session in progress · user_" + S.user + " · prompt " + at + "/" + DQ.PROMPTS.length, 40);
     await TERM.sleep(600);
     TERM.pressAnyKey(function () { location.href = DQ.PAGES[S.progress - 1]; }, "> press any key to resume");
   } else {

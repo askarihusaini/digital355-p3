@@ -158,10 +158,13 @@ textarea.code { display: block; width: 100%; min-height: 200px; padding: 10px; f
 .mhead small { font-weight: 400; color: var(--mute); }
 .mlist { max-height: 220px; margin: 0 0 12px; padding: 0; overflow-y: auto; font-size: 14px; list-style: none; }
 .mlist li { padding: 7px 0; border-bottom: 1px solid var(--line); }
-.mnew { min-height: 48px; padding: 8px 10px; font-size: 14px; background: var(--bg); border: 1.5px solid var(--accent); border-radius: 8px; cursor: text; }
-.mph { color: #85837c; }
+.mnew { position: relative; min-height: 48px; padding: 8px 10px; font-size: 14px; line-height: 1.5; background: var(--bg); border: 1.5px solid var(--accent); border-radius: 8px; cursor: text; }
+/* the placeholder sits under the caret, flush left, like a real text box */
+.mph { position: absolute; top: 8px; left: 10px; color: #85837c; pointer-events: none; }
 .mtext:not(:empty) ~ .mph { display: none; }
-.caret::after { content: "\258D"; animation: blink 1s steps(1) infinite; }
+.caret { display: inline-block; width: 1.5px; height: 1.2em; margin-right: -1.5px; vertical-align: text-bottom; background: var(--ink); animation: blink 1s steps(1) infinite; }
+.caret[hidden] { display: none; }
+body.flick .caret { background-color: #33ff33 !important; }
 .mfoot { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 12px; color: var(--mute); }
 
 @media (max-width: 800px) {

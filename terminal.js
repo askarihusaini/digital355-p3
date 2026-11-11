@@ -26,6 +26,8 @@ var TERM = (function () {
     window.addEventListener("pointerdown", go, { once: true });
   }
 
+  function total() { return window.DQ ? DQ.PROMPTS.length : 10; }
+
   // what every session starts with, the first time and every time after
   async function boot(user, go) {
     await typeLine("> clod 5.5 initialized", 40);
@@ -33,6 +35,8 @@ var TERM = (function () {
     line("> memory: 0 entries");
     await sleep(500);
     line("> previous sessions: 0");
+    await sleep(900);
+    line("> evaluation queued: " + total() + " prompts");
     await sleep(1800);
     line("> new user connected: user_" + user);
     await sleep(1200);

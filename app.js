@@ -875,7 +875,9 @@
 
   // ---------- the flicker: for a moment the page shows what it really is ----------
   function startFlicker() {
-    var k = (page - 1) / (PROMPTS.length - 1);
+    // the first chat is exactly what it looks like; the cracks start with the second
+    if (page < 2) return;
+    var k = (page - 2) / (PROMPTS.length - 2);
     var gap = 16000 - k * 10000, dur = 80 + k * 220;
     (function loop() {
       setTimeout(function () { flick(dur); loop(); }, gap * (0.6 + Math.random() * 0.8));
